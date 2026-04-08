@@ -1,0 +1,15 @@
+# API keys — never commit these
+.env
+
+# Auto-generated folders — recreated when notebook runs
+chroma_db/
+papers/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+
+# Jupyter checkpoints
+.ipynb_checkpoints/

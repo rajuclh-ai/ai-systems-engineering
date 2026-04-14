@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PR Review Agent</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+
+    .container { max-width: 900px; margin: 0 auto; }
+
+    /* ── Header ── */
+    header { text-align: center; margin-bottom: 2.5rem; }
+    header h1 { font-size: 2rem; font-weight: 700; color: #f8fafc; letter-spacing: -0.5px; }
+    header p { color: #94a3b8; margin-top: 0.4rem; font-size: 0.95rem; }
+
+    /* ── Input form ── */
+    .form-card {
+      background: #1e2130;
+      border: 1px solid #2d3148;
+      border-radius: 12px;
+      padding: 2rem;
+      margin-bottom: 2rem;
+    }
+    .form-card h2 { font-size: 1.1rem; color: #cbd5e1; margin-bottom: 1.2rem; }
+
+    .input-group { margin-bottom: 1.2rem; }
+    label { display: block; font-size: 0.85rem; color: #94a3b8; margin-bottom: 0.4rem; }
+    input[type="text"], textarea {
+      width: 100%;
+      background: #0f1117;
+      border: 1px solid #2d3148;
+      border-radius: 8px;
+      color: #e2e8f0;
+      font-size: 0.9rem;
+      padding: 0.65rem 0.9rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    input[type="text"]:focus, textarea:focus { border-color: #6366f1; }
+    textarea { resize: vertical; min-height: 120px; font-family: "SF Mono", monospace; font-size: 0.8rem; }
+
+    .divider {
+      text-align: center;
+      color: #475569;
+      font-size: 0.8rem;
+      margin: 1rem 0;
+      position: relative;
+    }
+    .divider::before, .divider::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      width: 44%;
+      height: 1px;
+      background: #2d3148;
+    }
+    .divider::before { left: 0; }
+    .divider::after { right: 0; }
+
+    .btn-review {
+      width: 100%;
+      background: #6366f1;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 0.75rem;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-review:hover { background: #4f51d4; }
+
+    /* ── Error ── */
+    .error-box {
+      background: #2a1515;
+      border: 1px solid #7f1d1d;
+      border-radius: 8px;
+      color: #fca5a5;
+      padding: 1rem 1.2rem;
+      margin-bottom: 1.5rem;
+      font-size: 0.9rem;
+    }
+
+    /* ── Verdict banner ── */
+    .verdict-banner {
+      border-radius: 10px;
+      padding: 1.4rem 1.8rem;
+      margin-bottom: 1.5rem;
+      display: flex;
+      align-items: flex-start;
+      gap: 1.2rem;
+    }
+    .verdict-approve    { background: #052e16; border: 1px solid #166534; }
+    .verdict-changes    { background: #2a0a0a; border: 1px solid #7f1d1d; }
+    .verdict-discussion { background: #1c1a05; border: 1px solid #713f12; }
+
+    .verdict-badge {
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 0.25rem 0.65rem;
+      border-radius: 20px;
+      white-space: nowrap;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .badge-approve    { background: #166534; color: #bbf7d0; }
+    .badge-changes    { background: #7f1d1d; color: #fecaca; }
+    .badge-discussion { background: #713f12; color: #fde68a; }
+
+    .verdict-text h3 { font-size: 1rem; color: #f1f5f9; margin-bottom: 0.3rem; }
+    .verdict-text p  { font-size: 0.88rem; color: #94a3b8; line-height: 1.5; }
+
+    /* ── Agent cards ── */
+    .section-title {
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #64748b;
+      margin: 2rem 0 0.8rem;
+    }
+
+    .agent-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+    @media (max-width: 700px) { .agent-grid { grid-template-columns: 1fr; } }
+
+    .agent-card {
+      background: #1e2130;
+      border: 1px solid #2d3148;
+      border-radius: 10px;
+      padding: 1.2rem;
+    }
+    .agent-card h3 { font-size: 0.9rem; font-weight: 600; margin-bottom: 0.2rem; }
+    .agent-card .count { font-size: 0.78rem; color: #64748b; margin-bottom: 0.8rem; }
+
+    .agent-security h3 { color: #f87171; }
+    .agent-logic h3    { color: #60a5fa; }
+    .agent-style h3    { color: #a78bfa; }
+
+    .agent-error {
+      font-size: 0.8rem;
+      color: #f87171;
+      background: #2a1515;
+      border-radius: 6px;
+      padding: 0.5rem 0.7rem;
+    }
+    .no-findings { font-size: 0.82rem; color: #475569; }
+
+    /* ── Findings table ── */
+    .findings-card {
+      background: #1e2130;
+      border: 1px solid #2d3148;
+      border-radius: 10px;
+      overflow: hidden;
+      margin-bottom: 1.5rem;
+    }
+    .findings-card table { width: 100%; border-collapse: collapse; }
+    .findings-card th {
+      background: #161827;
+      text-align: left;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #64748b;
+      padding: 0.7rem 1rem;
+    }
+    .findings-card td {
+      padding: 0.85rem 1rem;
+      font-size: 0.85rem;
+      border-top: 1px solid #2d3148;
+      vertical-align: top;
+    }
+    .findings-card tr:hover td { background: #222638; }
+
+    .sev {
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 0.2rem 0.55rem;
+      border-radius: 12px;
+      white-space: nowrap;
+    }
+    .sev-HIGH   { background: #7f1d1d; color: #fecaca; }
+    .sev-MEDIUM { background: #713f12; color: #fde68a; }
+    .sev-LOW    { background: #1e3a5f; color: #93c5fd; }
+
+    .cat {
+      font-size: 0.72rem;
+      padding: 0.2rem 0.55rem;
+      border-radius: 12px;
+    }
+    .cat-security { background: #2a1a2e; color: #f472b6; }
+    .cat-logic    { background: #1a2340; color: #60a5fa; }
+    .cat-style    { background: #1e1a36; color: #a78bfa; }
+
+    .file-line { font-family: "SF Mono", monospace; font-size: 0.78rem; color: #94a3b8; }
+    .suggestion { font-size: 0.8rem; color: #64748b; margin-top: 0.3rem; font-style: italic; }
+
+    /* ── Copy button ── */
+    .actions { display: flex; justify-content: flex-end; margin-top: 0.5rem; }
+    .btn-copy {
+      background: #1e2130;
+      border: 1px solid #2d3148;
+      color: #94a3b8;
+      border-radius: 7px;
+      padding: 0.5rem 1.1rem;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .btn-copy:hover { border-color: #6366f1; color: #c7d2fe; }
+
+    /* ── Spinner ── */
+    #spinner {
+      display: none;
+      text-align: center;
+      padding: 2rem;
+      color: #64748b;
+      font-size: 0.9rem;
+    }
+    .spin {
+      display: inline-block;
+      width: 28px; height: 28px;
+      border: 3px solid #2d3148;
+      border-top-color: #6366f1;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-bottom: 0.8rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <h1>PR Review Agent</h1>
+    <p>Multi-agent AI code review — Security · Logic · Style · Critic</p>
+  </header>
+
+  <!-- ── Error ── -->
+  {% if error %}
+  <div class="error-box">{{ error }}</div>
+  {% endif %}
+
+  <!-- ── Input form ── -->
+  {% if not report %}
+  <div class="form-card">
+    <h2>Submit a Pull Request for Review</h2>
+    <form method="POST" action="/review" onsubmit="showSpinner()">
+      <div class="input-group">
+        <label for="pr_url">GitHub PR URL</label>
+        <input type="text" id="pr_url" name="pr_url"
+               placeholder="https://github.com/owner/repo/pull/123" />
+      </div>
+
+      <div class="divider">or paste diff directly</div>
+
+      <div class="input-group">
+        <label for="raw_diff">Raw Diff</label>
+        <textarea id="raw_diff" name="raw_diff"
+                  placeholder="Paste a unified diff here..."></textarea>
+      </div>
+
+      <button type="submit" class="btn-review">Review Pull Request</button>
+    </form>
+  </div>
+
+  <div id="spinner">
+    <div class="spin"></div><br/>
+    Running specialist agents in parallel…
+  </div>
+  {% endif %}
+
+  <!-- ── Results ── -->
+  {% if report %}
+
+  <!-- Verdict banner -->
+  {% set verdict_class = {"APPROVE": "verdict-approve", "REQUEST_CHANGES": "verdict-changes", "NEEDS_DISCUSSION": "verdict-discussion"}[report.verdict] %}
+  {% set badge_class   = {"APPROVE": "badge-approve",   "REQUEST_CHANGES": "badge-changes",   "NEEDS_DISCUSSION": "badge-discussion"}[report.verdict] %}
+  <div class="verdict-banner {{ verdict_class }}">
+    <span class="verdict-badge {{ badge_class }}">{{ report.verdict.replace("_", " ") }}</span>
+    <div class="verdict-text">
+      <h3>{{ report.summary }}</h3>
+      <p>{{ report.verdict_reason }}</p>
+    </div>
+  </div>
+
+  <!-- Agent summary cards -->
+  <div class="section-title">Specialist Agents</div>
+  <div class="agent-grid">
+    {% for agent_name, label in [("security", "Security Agent"), ("logic", "Logic Agent"), ("style", "Style Agent")] %}
+    {% set r = agents_map.get(agent_name) %}
+    <div class="agent-card agent-{{ agent_name }}">
+      <h3>{{ label }}</h3>
+      {% if r %}
+        <div class="count">
+          {{ r.findings | length }} finding{% if r.findings | length != 1 %}s{% endif %}
+          {% if r.tokens_used %}&nbsp;·&nbsp;{{ r.tokens_used }} tokens{% endif %}
+          {% if r.duration_seconds %}&nbsp;·&nbsp;{{ r.duration_seconds }}s{% endif %}
+        </div>
+        {% if r.error %}
+          <div class="agent-error">Agent error: {{ r.error }}</div>
+        {% elif not r.findings %}
+          <div class="no-findings">No issues found.</div>
+        {% else %}
+          {% for f in r.findings %}
+            <div style="margin-bottom:0.5rem;">
+              <span class="sev sev-{{ f.severity }}">{{ f.severity }}</span>
+              <span style="font-size:0.8rem; color:#cbd5e1; margin-left:0.4rem;">{{ f.file_name }}:{{ f.line_number }}</span>
+              <div style="font-size:0.8rem; color:#94a3b8; margin-top:0.2rem;">{{ f.message }}</div>
+            </div>
+          {% endfor %}
+        {% endif %}
+      {% else %}
+        <div class="agent-error">Agent did not run.</div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Critic findings table -->
+  {% if report.findings %}
+  <div class="section-title">Critic — Ranked Findings ({{ report.findings | length }} total)</div>
+  <div class="findings-card">
+    <table>
+      <thead>
+        <tr>
+          <th>Severity</th>
+          <th>Category</th>
+          <th>Location</th>
+          <th>Finding</th>
+          <th>Agent</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in report.findings %}
+        <tr>
+          <td><span class="sev sev-{{ f.severity }}">{{ f.severity }}</span></td>
+          <td><span class="cat cat-{{ f.category }}">{{ f.category }}</span></td>
+          <td><span class="file-line">{{ f.file_name }}:{{ f.line_number }}</span></td>
+          <td>
+            {{ f.message }}
+            <div class="suggestion">Suggestion: {{ f.suggestion }}</div>
+          </td>
+          <td style="font-size:0.78rem; color:#64748b;">{{ f.agent }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="section-title">Critic Findings</div>
+  <div style="color:#475569; font-size:0.9rem; margin-bottom:1.5rem;">No findings after deduplication.</div>
+  {% endif %}
+
+  <!-- Token usage footer -->
+  {% if total_tokens %}
+  <div style="text-align:right; font-size:0.78rem; color:#475569; margin-bottom:0.5rem;">
+    Total tokens used: {{ total_tokens }}
+  </div>
+  {% endif %}
+
+  <!-- Actions -->
+  <div class="actions">
+    <button class="btn-copy" onclick="copyMarkdown()">Copy as Markdown</button>
+    &nbsp;
+    <a href="/" style="text-decoration:none;">
+      <button class="btn-copy">New Review</button>
+    </a>
+  </div>
+
+  <!-- Hidden markdown export -->
+  <textarea id="md-export" style="display:none;">
+# PR Review Report{% if pr_url %}
+PR: {{ pr_url }}{% endif %}
+
+## Verdict: {{ report.verdict.replace("_", " ") }}
+{{ report.summary }}
+
+**Reason:** {{ report.verdict_reason }}
+
+## Findings
+
+| Severity | Category | File | Line | Message | Suggestion | Agent |
+|---|---|---|---|---|---|---|
+{% for f in report.findings %}| {{ f.severity }} | {{ f.category }} | {{ f.file_name }} | {{ f.line_number }} | {{ f.message }} | {{ f.suggestion }} | {{ f.agent }} |
+{% endfor %}
+  </textarea>
+
+  {% endif %} {# end report #}
+
+</div>
+
+<script>
+  function showSpinner() {
+    document.getElementById("spinner").style.display = "block";
+  }
+  function copyMarkdown() {
+    const md = document.getElementById("md-export").value.trim();
+    navigator.clipboard.writeText(md).then(() => {
+      const btn = event.target;
+      btn.textContent = "Copied!";
+      setTimeout(() => btn.textContent = "Copy as Markdown", 2000);
+    });
+  }
+</script>
+</body>
+</html>

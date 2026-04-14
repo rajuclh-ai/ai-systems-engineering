@@ -8,15 +8,15 @@ A multi-agent AI system that reviews GitHub pull requests using a pipeline of sp
 
 **1. Submit a GitHub PR URL or paste a raw diff**
 
-![Input form](assets/screenshot_input.png)
+![Input form](assets/screenshot_input.jpg)
 
 **2. Three specialist agents run in parallel — each with token count and duration**
 
-![Results — verdict and agent cards](assets/screenshot_results.png)
+![Results — verdict and agent cards](assets/screenshot_results.jpg)
 
 **3. Critic synthesizes all findings — deduplicated, ranked by severity**
 
-![Critic findings table](assets/screenshot_findings.png)
+![Critic findings table](assets/screenshot_findings.jpg)
 
 ---
 

@@ -1,0 +1,25 @@
+{
+  "run_id": "2026-04-16T13-19-27Z",
+  "model": "gpt-4o-mini",
+  "rag": {},
+  "agent": {
+    "bug_recall": {
+      "score": 1.0,
+      "threshold": 0.7,
+      "pass": true
+    },
+    "false_positive_rate": {
+      "score": 0.4167,
+      "threshold": 0.4,
+      "pass": false
+    },
+    "comment_quality": {
+      "score": 0.6357,
+      "threshold": 0.6,
+      "pass": true
+    }
+  },
+  "overall": "FAIL",
+  "cost_usd": 0.0,
+  "total_tokens": 0
+}

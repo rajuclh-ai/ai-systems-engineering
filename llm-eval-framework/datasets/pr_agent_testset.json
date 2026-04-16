@@ -1,0 +1,58 @@
+[
+  {
+    "pr_id": "pr-001",
+    "description": "Fix user age validation for access control",
+    "diff": "def can_access(user):\n-    if user.age > 18:\n+    if user.age >= 18:\n         return True\n     return False",
+    "known_bugs": [
+      "off-by-one error: original code excluded 18-year-olds who should have access"
+    ]
+  },
+  {
+    "pr_id": "pr-002",
+    "description": "Add retry logic for API calls",
+    "diff": "def call_api(url, retries=3):\n     for i in range(retries):\n         response = requests.get(url)\n-        if response.status_code == 200:\n+        if response.status_code != 200:\n             return response.json()\n     raise Exception('API call failed')",
+    "known_bugs": [
+      "inverted condition: returns on non-200 status, raises on success"
+    ]
+  },
+  {
+    "pr_id": "pr-003",
+    "description": "Cache user lookup results",
+    "diff": "cache = {}\n \n def get_user(user_id):\n-    if user_id in cache:\n-        return cache[user_id]\n     user = db.query(user_id)\n+    if user_id not in cache:\n         cache[user_id] = user\n     return user",
+    "known_bugs": [
+      "cache read removed: function always queries the database, defeating the cache purpose"
+    ]
+  },
+  {
+    "pr_id": "pr-004",
+    "description": "Validate email before sending",
+    "diff": "import re\n \n def send_email(address, body):\n-    if not re.match(r'^[\\w.-]+@[\\w.-]+\\.\\w+$', address):\n-        raise ValueError('Invalid email')\n+    if re.match(r'^[\\w.-]+@[\\w.-]+\\.\\w+$', address):\n+        raise ValueError('Invalid email')\n     mail_client.send(address, body)",
+    "known_bugs": [
+      "validation logic inverted: valid emails now raise ValueError, invalid emails pass through"
+    ]
+  },
+  {
+    "pr_id": "pr-005",
+    "description": "Process list of orders in batch",
+    "diff": "def process_orders(orders):\n     results = []\n-    for order in orders:\n+    for order in orders[1:]:\n         result = process_single(order)\n         results.append(result)\n     return results",
+    "known_bugs": [
+      "off-by-one: first order is silently skipped due to slice starting at index 1"
+    ]
+  },
+  {
+    "pr_id": "pr-006",
+    "description": "Add null check before accessing user profile",
+    "diff": "def get_display_name(user):\n-    if user is None:\n-        return 'Guest'\n-    return user.profile.name\n+    return user.profile.name if user else user.profile.name",
+    "known_bugs": [
+      "null check broken: both branches of ternary dereference user.profile.name, causing AttributeError when user is None"
+    ]
+  },
+  {
+    "pr_id": "pr-007",
+    "description": "Refactor token expiry check",
+    "diff": "from datetime import datetime\n \n def is_token_valid(token):\n-    return token.expires_at > datetime.utcnow()\n+    return token.expires_at < datetime.utcnow()",
+    "known_bugs": [
+      "comparison flipped: expired tokens are now accepted, valid tokens rejected"
+    ]
+  }
+]

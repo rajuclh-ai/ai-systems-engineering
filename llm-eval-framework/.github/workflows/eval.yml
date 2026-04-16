@@ -1,0 +1,59 @@
+name: LLM Eval
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout eval framework
+        uses: actions/checkout@v4
+        with:
+          path: llm-eval-framework
+
+      - name: Checkout arxiv-expert-rag
+        uses: actions/checkout@v4
+        with:
+          repository: rajuclh-ai/ai-systems-engineering
+          path: ai-systems-engineering
+          sparse-checkout: |
+            arxiv-expert-rag
+            pr_review_agent
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install eval framework dependencies
+        working-directory: llm-eval-framework
+        run: pip install -r requirements.txt
+
+      - name: Install arxiv-expert-rag dependencies
+        working-directory: ai-systems-engineering/arxiv-expert-rag
+        run: pip install -r requirements.txt
+
+      - name: Install pr_review_agent dependencies
+        working-directory: ai-systems-engineering/pr_review_agent/src
+        run: pip install -r requirements.txt
+
+      - name: Run evals
+        working-directory: llm-eval-framework
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          RAG_PROJECT_PATH: ${{ github.workspace }}/ai-systems-engineering/arxiv-expert-rag
+          AGENT_PROJECT_PATH: ${{ github.workspace }}/ai-systems-engineering/pr_review_agent/src
+        run: python cli.py run --config eval_config.yaml
+
+      - name: Upload eval report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report-${{ github.sha }}
+          path: llm-eval-framework/outputs/

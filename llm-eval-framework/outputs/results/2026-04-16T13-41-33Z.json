@@ -1,0 +1,46 @@
+{
+  "run_id": "2026-04-16T13-41-33Z",
+  "model": "gpt-4o-mini",
+  "rag": {
+    "faithfulness": {
+      "score": 0.399,
+      "threshold": 0.7,
+      "pass": false
+    },
+    "answer_relevance": {
+      "score": 0.5599,
+      "threshold": 0.7,
+      "pass": false
+    },
+    "context_recall": {
+      "score": 0.6236,
+      "threshold": 0.65,
+      "pass": false
+    },
+    "context_precision": {
+      "score": 0.7458,
+      "threshold": 0.65,
+      "pass": true
+    }
+  },
+  "agent": {
+    "bug_recall": {
+      "score": 0.8571,
+      "threshold": 0.7,
+      "pass": true
+    },
+    "false_positive_rate": {
+      "score": 0.0286,
+      "threshold": 0.4,
+      "pass": true
+    },
+    "comment_quality": {
+      "score": 0.6548,
+      "threshold": 0.6,
+      "pass": true
+    }
+  },
+  "overall": "FAIL",
+  "cost_usd": 0.003464,
+  "total_tokens": 23093
+}

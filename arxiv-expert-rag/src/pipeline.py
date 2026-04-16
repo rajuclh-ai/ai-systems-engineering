@@ -5,7 +5,7 @@ import logging
 from .embed import embed_papers
 from .generator import Answer, generate_answer
 from .ingest import run_ingest
-from .retriever import Retriever
+from .retriever import Chunk, Retriever
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +36,21 @@ def run_ingest_pipeline() -> dict:
         logger.info("No new papers — skipping embedding step")
 
     return {"new_papers": new_papers, "chunks_added": chunks_added}
+
+
+def run_query_pipeline_with_context(question: str, top_k: int | None = None) -> tuple[Answer, list[Chunk]]:
+    """
+    Answer a research question and return retrieved chunks alongside the answer.
+    Used by the eval framework — RAGAS needs both the answer and the source contexts.
+
+    Returns:
+        (Answer, list[Chunk]) — answer dataclass + raw retrieved chunks.
+    """
+    logger.info(f"Query pipeline (with context): {question[:80]}")
+    retriever = _get_retriever()
+    chunks = retriever.search(question, top_k=top_k)
+    answer = generate_answer(question, chunks)
+    return answer, chunks
 
 
 def run_query_pipeline(question: str, top_k: int | None = None) -> Answer:

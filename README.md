@@ -30,11 +30,47 @@ GitHub PR URL
 
 ### [Arxiv Expert RAG](./arxiv-expert-rag)
 
-A retrieval-augmented generation pipeline for AI/ML research question answering.
+A retrieval-augmented generation pipeline that answers natural language questions about AI/ML research papers fetched from ArXiv.
 
-**Key concepts:** Multi-tier retrieval · Vector search · Document chunking · LLM grounding
+```
+ArXiv RSS (cs.AI, cs.LG)
+      ↓  ingest + chunk
+  ChromaDB  (vector store)
+      ↓  similarity search
+  Retrieved Chunks  →  GPT-4o-mini  →  Grounded Answer
+```
 
-**Tech:** Python · FAISS · OpenAI · LangChain
+**Key concepts:** Retrieval-augmented generation · Vector search · Incremental ingestion · LLM grounding · Two implementations (notebook for learning, production CLI)
+
+**Tech:** Python · ChromaDB · sentence-transformers · OpenAI gpt-4o-mini
+
+---
+
+### [LLM Eval Framework](./llm-eval-framework)
+
+An automated evaluation framework that tests the two systems above — runs in CI and fails the build when quality drops below defined thresholds.
+
+```
+eval_config.yaml (thresholds)
+        ↓
+    cli.py run
+   ┌────┴────┐
+   ▼         ▼
+RAG Eval   Agent Eval
+   │              │
+RAGAS metrics   LLM-as-judge
+faithfulness    bug recall
+answer rel.     false positive rate
+context recall  comment quality
+   └────┬────┘
+   PASS / FAIL  →  outputs/reports/latest_report.md
+                →  outputs/history/metrics_log.jsonl  (trend log)
+                →  GitHub Actions CI gate (exit 1 on FAIL)
+```
+
+**Key concepts:** LLM-as-judge evaluation · RAGAS metrics · Testset auto-generation · CI quality gates · Metric trend tracking
+
+**Tech:** Python · RAGAS · OpenAI gpt-4o-mini · pytest (56 tests, all LLM calls mocked) · GitHub Actions
 
 ---
 

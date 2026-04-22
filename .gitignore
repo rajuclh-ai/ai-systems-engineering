@@ -3,3 +3,6 @@ __pycache__/
 *.pyc
 *.pyo
 .pytest_cache/
+
+# Session context docs — personal reference, not for GitHub
+self-healing-pipeline-agent/docs/

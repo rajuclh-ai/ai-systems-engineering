@@ -1,0 +1,13 @@
+{
+  "pipeline_id": "transactions-pipeline-01",
+  "timestamp": "2026-04-23T10:10:00",
+  "event_type": "schema_drift",
+  "metrics": {
+    "expected_version": "v4",
+    "received_version": "v5",
+    "affected_pct": 100.0,
+    "new_fields": ["merchant_category_code"],
+    "removed_fields": []
+  },
+  "raw_log": "SchemaRegistryException: Incompatible schema evolution for topic transactions-v4"
+}

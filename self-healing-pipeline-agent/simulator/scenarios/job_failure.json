@@ -1,0 +1,13 @@
+{
+  "pipeline_id": "enrichment-job-05",
+  "timestamp": "2026-04-23T10:20:00",
+  "event_type": "job_failure",
+  "metrics": {
+    "job_id": "flink-enrichment-05",
+    "error_code": "NPE",
+    "restart_count": 1,
+    "last_checkpoint": "cp-20260423-0950",
+    "error_message": "NullPointerException in EnrichmentMapper at line 42"
+  },
+  "raw_log": "Job flink-enrichment-05 failed with NullPointerException. Restart count: 1"
+}

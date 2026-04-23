@@ -1,0 +1,12 @@
+{
+  "pipeline_id": "user-events-pipeline-02",
+  "timestamp": "2026-04-23T10:15:00",
+  "event_type": "null_spike",
+  "metrics": {
+    "field_name": "user_id",
+    "null_rate": 0.45,
+    "baseline_null_rate": 0.02,
+    "affected_pipelines": ["user-events-pipeline-02"]
+  },
+  "raw_log": "Null rate for field user_id spiked to 45% against baseline of 2%"
+}

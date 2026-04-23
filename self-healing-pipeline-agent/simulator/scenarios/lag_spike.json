@@ -1,0 +1,14 @@
+{
+  "pipeline_id": "clickstream-flink-job-03",
+  "timestamp": "2026-04-23T10:00:00",
+  "event_type": "consumer_lag_spike",
+  "metrics": {
+    "current_lag": 2850000,
+    "threshold": 500000,
+    "growth_rate": 125000,
+    "partition_count": 12,
+    "consumer_group": "flink-clickstream-processor",
+    "cpu_pct": 94
+  },
+  "raw_log": "Consumer group flink-clickstream-processor lag exceeded threshold: 2850000 messages"
+}

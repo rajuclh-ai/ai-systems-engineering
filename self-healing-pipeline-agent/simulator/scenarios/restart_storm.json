@@ -1,0 +1,16 @@
+{
+  "pipeline_id": "payments-flink-job-01",
+  "timestamp": "2026-04-23T10:05:00",
+  "event_type": "restart_storm",
+  "metrics": {
+    "job_id": "flink-job-payments-01",
+    "restart_count": 14,
+    "window_minutes": 10,
+    "restart_threshold": 5,
+    "last_savepoint": "cp-20260423-0950",
+    "savepoint_path": "s3://pipeline-checkpoints/job-01/sp-20260423-1000",
+    "error_code": "OOM",
+    "error_message": "Java heap space exceeded"
+  },
+  "raw_log": "Job flink-job-payments-01 restarted 14 times in 10 minutes. Threshold: 5"
+}

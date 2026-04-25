@@ -177,7 +177,7 @@ self-healing-pipeline-agent/
 |---|---|---|
 | Phase 0 | Project structure, Pydantic models, test fixtures | ✅ Done |
 | Week 1 | AgentState, Monitor Node, event simulator, test_monitor | ✅ Done |
-| Week 2 | Diagnosis, Remediation, Executor, Learning, graph wiring | ⬜ Not started |
+| Week 2 | Diagnosis, Remediation, Executor, Learning, graph wiring | ✅ Done |
 | Week 3 | FastAPI, approval endpoint, CI, README | ⬜ Not started |
 
 ---

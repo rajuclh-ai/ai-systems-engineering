@@ -74,6 +74,34 @@ context recall  comment quality
 
 ---
 
+### [Self-Healing Pipeline Agent](./self-healing-pipeline-agent)
+
+A production-grade LangGraph agent that monitors data pipeline failures, diagnoses root causes autonomously, proposes remediations, and learns from outcomes over time. Built on real Flink/Kafka failure patterns.
+
+```
+POST /incidents  (FastAPI)
+        ↓
+  Monitor Node    rule-based classification — no LLM
+        ↓  conditional edge (anomaly_type)
+  Diagnosis Node  LLM root cause analysis + SQLite memory query
+        ↓
+  Remediation Node  LLM fix strategy selection + risk scoring
+        ↓  conditional edge (risk_score > 0.7?)
+  Human Checkpoint  LangGraph interrupt() — APPROVE | REJECT
+        ↓
+  Executor Node   simulated fix execution per strategy
+        ↓
+  Learning Node   writes IncidentRecord to SQLite
+        ↓
+  LangSmith  (full trace per incident)
+```
+
+**Key concepts:** LangGraph stateful orchestration · Conditional routing · Human-in-the-loop interrupt/resume · LangSmith observability · SQLite incident memory · Durable state via MemorySaver
+
+**Tech:** Python · LangGraph · LangChain · OpenAI gpt-4o-mini · LangSmith · FastAPI · SQLAlchemy · Pydantic · pytest (65 tests, all LLM calls mocked) · GitHub Actions
+
+---
+
 ## Engineering Philosophy
 
 Coming from 18 years building distributed systems (Kafka, Flink, microservices), I apply the same principles to AI applications:

@@ -84,6 +84,9 @@ def diagnosis_node(state: AgentState) -> dict:
 
     # Query memory before calling LLM
     similar_incidents = _query_similar_incidents(event.pipeline_id, anomaly_type)
+    history_str = f"{len(similar_incidents)} past incident(s) found" if similar_incidents else "no history — first time"
+    logger.info("[DIAGNOSIS] pipeline=%s  anomaly=%s  history=%s  → calling LLM ...",
+                event.pipeline_id, anomaly_type, history_str)
 
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
     structured_llm = llm.with_structured_output(RootCause)
@@ -100,10 +103,7 @@ def diagnosis_node(state: AgentState) -> dict:
         "similar_incidents": json.dumps(similar_incidents, indent=2) if similar_incidents else "none",
     })
 
-    logger.info(
-        "Diagnosis complete — pipeline=%s confidence=%.2f cause=%s",
-        event.pipeline_id, root_cause.confidence, root_cause.primary_cause
-    )
+    logger.info("[DIAGNOSIS] confidence=%.2f  cause=%s", root_cause.confidence, root_cause.primary_cause)
 
     return {
         "root_cause": root_cause,

@@ -3,12 +3,7 @@ End-to-end graph tests.
 All LLM calls mocked — graph wiring and routing logic tested.
 """
 import pytest
-from unittest.mock import patch, MagicMock
 from agent.graph import route_after_monitor, route_after_remediation
-from models.diagnosis import RootCause
-from models.remediation import RemediationPlan, FixStrategy
-from models.execution import ExecutionResult, ExecutionStatus
-from datetime import datetime
 
 
 def _base_state(anomaly_type="lag_spike", severity="critical",

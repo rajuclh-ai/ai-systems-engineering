@@ -98,7 +98,7 @@ POST /incidents  (FastAPI)
 
 **Key concepts:** LangGraph stateful orchestration · Conditional routing · Human-in-the-loop interrupt/resume · LangSmith observability · SQLite incident memory · Durable state via MemorySaver
 
-**Tech:** Python · LangGraph · LangChain · OpenAI gpt-4o-mini · LangSmith · FastAPI · SQLAlchemy · Pydantic · pytest (65 tests, all LLM calls mocked) · GitHub Actions
+**Tech:** Python · LangGraph · LangChain · OpenAI gpt-4o-mini · LangSmith · FastAPI · SQLAlchemy · Pydantic · pytest (67 tests, all LLM calls mocked) · GitHub Actions
 
 ---
 

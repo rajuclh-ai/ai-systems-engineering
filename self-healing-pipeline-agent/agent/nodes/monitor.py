@@ -3,7 +3,10 @@ Monitor Node — rule-based anomaly classification.
 No LLM. Fully deterministic.
 Implements FR2 severity rules and combination detection.
 """
+import logging
 from agent.state import AgentState
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -87,8 +90,11 @@ def _detect_combination(anomaly_type: str, metrics: dict) -> str:
             return "lag_spike_high_cpu"
 
     if anomaly_type == "restart_storm":
-        growth_rate = metrics.get("growth_rate", 0)
-        if growth_rate > 0:
+        # RESTART_STORM_LAG_SPIKE: restarts are so frequent they're causing lag
+        # Detected when restart_count is more than 3x the threshold
+        restart_count = metrics.get("restart_count", 0)
+        restart_threshold = metrics.get("restart_threshold", 1)
+        if restart_count > restart_threshold * 3:
             return "restart_storm_lag_spike"
 
     return "none"
@@ -121,6 +127,7 @@ def monitor_node(state: AgentState) -> dict:
     classifier = _CLASSIFIERS.get(event_type)
 
     if classifier is None:
+        logger.info("[MONITOR] pipeline=%s  event=%s  → UNKNOWN (no classifier)", event.pipeline_id, event_type)
         return {
             "anomaly_type": "unknown",
             "severity": None,
@@ -129,6 +136,10 @@ def monitor_node(state: AgentState) -> dict:
 
     anomaly_type, severity = classifier(metrics)
     combination = _detect_combination(anomaly_type, metrics)
+
+    combo_str = f"  combination={combination}" if combination != "none" else ""
+    logger.info("[MONITOR] pipeline=%s  event=%s  → anomaly=%s  severity=%s%s",
+                event.pipeline_id, event_type, anomaly_type, severity, combo_str)
 
     return {
         "anomaly_type": anomaly_type,

@@ -80,7 +80,7 @@ def executor_node(state: AgentState) -> dict:
             action_taken=action_taken,
             timestamp=datetime.utcnow(),
         )
-        logger.info("Execution skipped — human rejected fix for %s", event.pipeline_id)
+        logger.info("[EXECUTOR] REJECTED by human  → action=SKIPPED  pipeline=%s", event.pipeline_id)
         return {"execution_result": result}
 
     # Execute the fix
@@ -94,9 +94,6 @@ def executor_node(state: AgentState) -> dict:
         timestamp=datetime.utcnow(),
     )
 
-    logger.info(
-        "Execution complete — pipeline=%s strategy=%s status=%s",
-        event.pipeline_id, plan.strategy, result.status
-    )
+    logger.info("[EXECUTOR] strategy=%s  → %s", plan.strategy.value, action_taken)
 
     return {"execution_result": result}

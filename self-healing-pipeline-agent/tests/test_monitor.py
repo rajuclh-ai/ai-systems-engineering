@@ -59,6 +59,22 @@ def test_restart_storm_high_when_over_threshold(restart_storm_event):
     assert result["severity"] == "high"
 
 
+def test_restart_storm_lag_spike_combination_detected(restart_storm_event):
+    """restart_count > 3x threshold → RESTART_STORM_LAG_SPIKE combination."""
+    # restart_count=14, threshold=5 → 14 > 15? No → 14 > 5*3=15? No.
+    # Set restart_count=16 to exceed 3x threshold of 5
+    restart_storm_event.metrics["restart_count"] = 16
+    result = monitor_node({"event": restart_storm_event, "messages": [], "iteration_count": 0})
+    assert result["combination"] == "restart_storm_lag_spike"
+
+
+def test_restart_storm_no_combination_below_3x(restart_storm_event):
+    """restart_count ≤ 3x threshold → no combination."""
+    restart_storm_event.metrics["restart_count"] = 14   # 14 < 5*3=15
+    result = monitor_node({"event": restart_storm_event, "messages": [], "iteration_count": 0})
+    assert result["combination"] == "none"
+
+
 # ---------------------------------------------------------------------------
 # SCHEMA_DRIFT tests
 # ---------------------------------------------------------------------------

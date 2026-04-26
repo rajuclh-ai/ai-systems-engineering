@@ -46,10 +46,8 @@ def learning_node(state: AgentState) -> dict:
             session.add(row)
             session.commit()
 
-        logger.info(
-            "Incident stored — id=%s pipeline=%s strategy=%s outcome=%s",
-            incident_id, event.pipeline_id, strategy, outcome
-        )
+        logger.info("[LEARNING] stored incident  pipeline=%s  strategy=%s  outcome=%s  id=%s",
+                    event.pipeline_id, strategy, outcome, incident_id)
         return {"incident_id": incident_id, "stored": True}
 
     except Exception as e:

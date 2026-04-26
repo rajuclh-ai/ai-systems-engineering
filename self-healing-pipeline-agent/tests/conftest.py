@@ -6,11 +6,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 from datetime import datetime
 
-from models.events import (
-    PipelineEvent, AnomalyType, Severity,
-    LagMetrics, RestartStormMetrics, SchemaMetrics,
-    NullMetrics, JobMetrics,
-)
+from models.events import PipelineEvent
 from models.diagnosis import RootCause
 from models.remediation import RemediationPlan, FixStrategy
 from models.execution import ExecutionResult, ExecutionStatus

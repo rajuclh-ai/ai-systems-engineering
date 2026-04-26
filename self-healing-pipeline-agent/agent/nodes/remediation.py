@@ -80,6 +80,9 @@ def remediation_node(state: AgentState) -> dict:
     allowed_strategies = _get_allowed_strategies(anomaly_type, combination)
     risk_scores = {s.value: RISK_SCORES[s] for s in allowed_strategies}
 
+    logger.info("[REMEDIATION] pipeline=%s  allowed_strategies=%s  → calling LLM ...",
+                event.pipeline_id, [s.value for s in allowed_strategies])
+
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
     structured_llm = llm.with_structured_output(RemediationPlan)
     chain = REMEDIATION_PROMPT | structured_llm
@@ -98,10 +101,9 @@ def remediation_node(state: AgentState) -> dict:
     plan.risk_score = RISK_SCORES.get(plan.strategy, 0.5)
     requires_approval = plan.risk_score > RISK_THRESHOLD
 
-    logger.info(
-        "Remediation plan — pipeline=%s strategy=%s risk=%.1f hitl=%s",
-        event.pipeline_id, plan.strategy, plan.risk_score, requires_approval
-    )
+    hitl_str = "⚠️  HITL required" if requires_approval else "auto-execute"
+    logger.info("[REMEDIATION] strategy=%s  risk=%.1f  → %s",
+                plan.strategy.value, plan.risk_score, hitl_str)
 
     return {
         "remediation_plan": plan,

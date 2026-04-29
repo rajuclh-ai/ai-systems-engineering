@@ -1,24 +1,27 @@
 """
-Executor Node — simulated fix execution.
-Calls a mock action per strategy and returns ExecutionResult.
+Executor Node — fix execution.
+RESTART strategy calls the real Flink REST API when FLINK_REST_URL is set.
+All other strategies remain simulated.
 If human rejected, falls back to ALERT_ONLY.
 """
 import logging
 from datetime import datetime
 from models.remediation import FixStrategy
 from models.execution import ExecutionResult, ExecutionStatus
+from agent.tools.flink_client import get_flink_client
 from agent.state import AgentState
 
 logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Simulated action handlers — one per strategy
+# Action handlers — one per strategy
 # ---------------------------------------------------------------------------
 
 def _restart_job(pipeline_id: str, metrics: dict) -> str:
     job_id = metrics.get("job_id", pipeline_id)
-    return f"Restarted job {job_id} on pipeline {pipeline_id}"
+    client = get_flink_client()
+    return client.restart_job(job_id=job_id, pipeline_id=pipeline_id)
 
 
 def _reroute_traffic(pipeline_id: str, metrics: dict) -> str:

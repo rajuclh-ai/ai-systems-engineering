@@ -1,0 +1,47 @@
+volumes:
+  flink-examples:   # shared volume — jobmanager copies JAR here, init reads from here
+
+services:
+
+  jobmanager:
+    image: apache/flink:1.18-scala_2.12
+    container_name: flink-jobmanager
+    ports:
+      - "8081:8081"
+    command: jobmanager
+    environment:
+      - "FLINK_PROPERTIES=jobmanager.rpc.address: jobmanager"
+    volumes:
+      - flink-examples:/flink-examples
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/config"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Copy the JAR into the shared volume on startup
+    entrypoint: >
+      sh -c "cp /opt/flink/examples/streaming/StateMachineExample.jar /flink-examples/ &&
+             /docker-entrypoint.sh jobmanager"
+
+  taskmanager:
+    image: apache/flink:1.18-scala_2.12
+    container_name: flink-taskmanager
+    command: taskmanager
+    environment:
+      - "FLINK_PROPERTIES=jobmanager.rpc.address: jobmanager"
+    depends_on:
+      jobmanager:
+        condition: service_healthy
+
+  flink-init:
+    image: curlimages/curl:latest
+    container_name: flink-init
+    depends_on:
+      jobmanager:
+        condition: service_healthy
+      taskmanager:
+        condition: service_started
+    volumes:
+      - ./init-flink.sh:/init-flink.sh
+      - flink-examples:/flink-examples
+    entrypoint: ["sh", "/init-flink.sh"]

@@ -27,6 +27,9 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "integration: requires a running Flink cluster (skipped in CI)",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["agent", "models", "api", "simulator"]

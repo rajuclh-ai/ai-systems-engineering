@@ -108,7 +108,7 @@ Risk score > 0.7 → Human approval required before execution.
 | Production authentication | No API key auth on endpoints — not the focus of this prototype. |
 | Async API under load | `graph.invoke()` is synchronous — concurrent incidents are not handled. |
 | Prometheus metrics | No counters or latency tracking — stdout logs only. |
-| Postgres | SQLite only — MemorySaver is in-memory and does not survive restarts. |
+| Postgres | SQLite only — checkpoint state is persisted via SqliteSaver (upgrade path to Postgres deferred). |
 
 ---
 
@@ -121,7 +121,8 @@ Risk score > 0.7 → Human approval required before execution.
 | HITL payload | Minimal: `thread_id` + `decision` | Clean API contract — engineer has full context in the UI |
 | Simulator | Static JSON files per scenario | Deterministic tests — same input always produces same output |
 | FastAPI contracts | Typed Pydantic on every endpoint | Consistent with agent layer — typed everywhere, self-documenting |
-| Memory store | SQLite via SQLAlchemy | Real relational DB, zero infrastructure, easy upgrade path to Postgres |
+| Incident store | SQLite via SQLAlchemy | Real relational DB, zero infrastructure, easy upgrade path to Postgres |
+| Checkpoint store | SqliteSaver (checkpoints.db) | Durable LangGraph state — HITL pauses survive server restarts |
 | LLM | gpt-4o-mini | Cost-efficient for high-frequency monitoring — handles diagnosis well |
 | Orchestration | LangGraph over raw asyncio | Durable state, HITL interrupts, crash recovery — not possible with asyncio |
 | RESTART execution | Real Flink REST API | One real integration changes the story from simulation to prototype |
@@ -155,7 +156,7 @@ self-healing-pipeline-agent/
 ├── agent/
 │   ├── graph.py              # LangGraph StateGraph — entry point
 │   ├── state.py              # AgentState TypedDict
-│   ├── checkpointer.py       # MemorySaver setup
+│   ├── checkpointer.py       # SqliteSaver — durable state across restarts
 │   ├── nodes/
 │   │   ├── monitor.py        # Rule-based anomaly classification
 │   │   ├── diagnosis.py      # LLM root cause analysis
@@ -214,6 +215,7 @@ self-healing-pipeline-agent/
 | Week 3 | FastAPI, approval endpoint, CI, README | ✅ Done |
 | Gap 1 | Real Flink RESTART via Docker + FlinkRestClient | ✅ Done |
 | Gap 7 | Verification node — polls Flink, retries on failure | ✅ Done |
+| Gap 3 | SqliteSaver — durable checkpoint state across restarts | ✅ Done |
 
 ---
 

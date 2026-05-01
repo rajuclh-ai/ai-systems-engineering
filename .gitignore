@@ -4,6 +4,8 @@ __pycache__/
 *.pyo
 .pytest_cache/
 *.db
+*.db-shm
+*.db-wal
 
 # Personal reference docs — not for GitHub
 self-healing-pipeline-agent/docs/

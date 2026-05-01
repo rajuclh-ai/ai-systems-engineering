@@ -15,6 +15,7 @@ class ExecutionResult(BaseModel):
     status: ExecutionStatus
     action_taken: str
     timestamp: datetime
+    new_job_id: Optional[str] = None   # set by FlinkRestClient after RESTART resubmit
 
 
 class IncidentRecord(BaseModel):

@@ -28,6 +28,10 @@ class AgentState(TypedDict):
 
     # --- Executor Node output ---
     execution_result: Optional[ExecutionResult]
+    restart_attempts: int                       # incremented each time executor runs RESTART
+
+    # --- Verification Node output ---
+    verification_status: Optional[str]          # "verified" | "failed" | "skipped"
 
     # --- Learning Node output ---
     incident_id: Optional[str]

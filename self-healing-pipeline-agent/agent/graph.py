@@ -2,6 +2,10 @@
 LangGraph StateGraph definition.
 Wires all nodes with conditional edges.
 Compiles with MemorySaver for durable state + HITL support.
+
+Graph flow:
+  monitor → diagnosis → remediation → [human_checkpoint?] → executor
+         → verification → [retry executor if failed?] → learning → END
 """
 from langgraph.graph import StateGraph, END
 from agent.state import AgentState
@@ -9,7 +13,8 @@ from agent.checkpointer import checkpointer
 from agent.nodes.monitor import monitor_node
 from agent.nodes.diagnosis import diagnosis_node
 from agent.nodes.remediation import remediation_node
-from agent.nodes.executor import executor_node
+from agent.nodes.executor import executor_node, MAX_RESTART_ATTEMPTS
+from agent.nodes.verification import verification_node
 from agent.nodes.learning import learning_node
 
 
@@ -37,6 +42,29 @@ def route_after_remediation(state: AgentState) -> str:
     return "executor"
 
 
+def route_after_verification(state: AgentState) -> str:
+    """
+    verified  → learning (success path)
+    skipped   → learning (non-RESTART strategies pass through)
+    failed    → executor again if attempts < MAX, else learning (exhausted)
+    """
+    verification_status = state.get("verification_status", "skipped")
+    restart_attempts = state.get("restart_attempts", 0)
+
+    if verification_status == "verified":
+        return "learning"
+
+    if verification_status == "skipped":
+        return "learning"
+
+    # verification failed — retry if attempts remaining
+    if restart_attempts < MAX_RESTART_ATTEMPTS:
+        return "executor"
+
+    # attempts exhausted — go to learning with FAILED outcome
+    return "learning"
+
+
 def human_checkpoint_node(state: AgentState) -> dict:
     """
     Placeholder node where LangGraph interrupts for human approval.
@@ -59,36 +87,46 @@ def build_graph() -> StateGraph:
     workflow.add_node("remediation", remediation_node)
     workflow.add_node("human_checkpoint", human_checkpoint_node)
     workflow.add_node("executor", executor_node)
+    workflow.add_node("verification", verification_node)
     workflow.add_node("learning", learning_node)
 
     # Entry point
     workflow.set_entry_point("monitor")
 
-    # Routing after monitor
+    # monitor → diagnosis | learning
     workflow.add_conditional_edges(
         "monitor",
         route_after_monitor,
         {"diagnosis": "diagnosis", "learning": "learning"},
     )
 
-    # Fixed edge: diagnosis → remediation
+    # diagnosis → remediation (fixed)
     workflow.add_edge("diagnosis", "remediation")
 
-    # Routing after remediation
+    # remediation → human_checkpoint | executor
     workflow.add_conditional_edges(
         "remediation",
         route_after_remediation,
         {"human_checkpoint": "human_checkpoint", "executor": "executor"},
     )
 
-    # After human checkpoint → executor
+    # human_checkpoint → executor (fixed — resumes after APPROVE/REJECT)
     workflow.add_edge("human_checkpoint", "executor")
 
-    # Fixed edges to end
-    workflow.add_edge("executor", "learning")
+    # executor → verification (fixed)
+    workflow.add_edge("executor", "verification")
+
+    # verification → executor (retry) | learning (success/exhausted)
+    workflow.add_conditional_edges(
+        "verification",
+        route_after_verification,
+        {"executor": "executor", "learning": "learning"},
+    )
+
+    # learning → END (fixed)
     workflow.add_edge("learning", END)
 
-    # Compile with checkpointer — interrupt before executor when HITL needed
+    # Compile with checkpointer — interrupt before human_checkpoint when HITL needed
     return workflow.compile(
         checkpointer=checkpointer,
         interrupt_before=["human_checkpoint"],

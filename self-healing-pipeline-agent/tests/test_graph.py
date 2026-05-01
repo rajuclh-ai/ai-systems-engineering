@@ -64,5 +64,5 @@ def test_graph_has_all_nodes():
     """All expected nodes are present in the graph."""
     from agent.graph import graph
     node_names = set(graph.nodes.keys())
-    expected = {"monitor", "diagnosis", "remediation", "human_checkpoint", "executor", "learning"}
+    expected = {"monitor", "diagnosis", "remediation", "human_checkpoint", "executor", "verification", "learning"}
     assert expected.issubset(node_names)

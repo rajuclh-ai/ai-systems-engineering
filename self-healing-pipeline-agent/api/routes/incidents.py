@@ -36,6 +36,7 @@ async def trigger_incident(request: TriggerIncidentRequest):
         "event": event,
         "messages": [],
         "iteration_count": 0,
+        "restart_attempts": 0,
     }
 
     try:

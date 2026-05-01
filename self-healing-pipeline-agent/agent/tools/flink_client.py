@@ -2,13 +2,14 @@
 Flink REST API client.
 
 FlinkRestClient  — real HTTP calls to a running Flink cluster.
-FlinkSimClient   — simulation fallback when FLINK_REST_URL is not set.
 
-The executor injects the right client based on the FLINK_REST_URL env var.
+FLINK_REST_URL is mandatory for RESTART strategy.
+If not set and RESTART is attempted, a RuntimeError is raised immediately.
 """
 import logging
 import os
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 
 import httpx
 
@@ -19,14 +20,28 @@ REQUEST_TIMEOUT = 10  # seconds
 
 
 # ---------------------------------------------------------------------------
+# Return type — structured so verification can use new_job_id
+# ---------------------------------------------------------------------------
+
+@dataclass
+class RestartResult:
+    action_taken: str
+    new_job_id: str
+
+
+# ---------------------------------------------------------------------------
 # Abstract interface
 # ---------------------------------------------------------------------------
 
 class FlinkClient(ABC):
 
     @abstractmethod
-    def restart_job(self, job_id: str, pipeline_id: str) -> str:
-        """Cancel the job and resubmit from the uploaded JAR. Returns action description."""
+    def restart_job(self, job_id: str, pipeline_id: str) -> RestartResult:
+        """Cancel the job and resubmit from the uploaded JAR. Returns RestartResult."""
+
+    @abstractmethod
+    def get_job_status(self, job_id: str) -> str:
+        """Return the current status of a job (RUNNING, FAILED, CANCELED, etc.)."""
 
 
 # ---------------------------------------------------------------------------
@@ -48,10 +63,6 @@ class FlinkRestClient(FlinkClient):
         response = httpx.patch(f"{self.base_url}{path}", json=body, timeout=REQUEST_TIMEOUT)
         response.raise_for_status()
 
-    def _delete(self, path: str) -> None:
-        response = httpx.delete(f"{self.base_url}{path}", timeout=REQUEST_TIMEOUT)
-        response.raise_for_status()
-
     def _post(self, path: str, body: dict) -> dict:
         response = httpx.post(f"{self.base_url}{path}", json=body, timeout=REQUEST_TIMEOUT)
         response.raise_for_status()
@@ -67,14 +78,13 @@ class FlinkRestClient(FlinkClient):
                 return jar_id
         raise RuntimeError(
             "StateMachineExample JAR not found in Flink. "
-            "Run: docker compose up  inside the docker/ folder."
+            "Run: docker compose up inside the docker/ folder."
         )
 
-    def restart_job(self, job_id: str, pipeline_id: str) -> str:
+    def restart_job(self, job_id: str, pipeline_id: str) -> RestartResult:
         logger.info("[FLINK] restarting job  job_id=%s  pipeline=%s", job_id, pipeline_id)
 
-        # Step 1 — cancel the job using the real Flink job ID from metrics
-        # Flink 1.18: PATCH /jobs/{id}?mode=cancel  (no body)
+        # Step 1 — cancel the job (Flink 1.18: PATCH /jobs/{id}?mode=cancel, no body)
         logger.info("[FLINK] cancelling job %s ...", job_id)
         self._patch(f"/jobs/{job_id}?mode=cancel", {})
         logger.info("[FLINK] job %s cancelled", job_id)
@@ -88,32 +98,31 @@ class FlinkRestClient(FlinkClient):
         new_job_id = result.get("jobid", "unknown")
         logger.info("[FLINK] job resubmitted  new_job_id=%s", new_job_id)
 
-        return (
-            f"Restarted job {job_id} on pipeline {pipeline_id} — "
-            f"new job_id={new_job_id}"
+        return RestartResult(
+            action_taken=f"Restarted job {job_id} on pipeline {pipeline_id} — new job_id={new_job_id}",
+            new_job_id=new_job_id,
         )
 
-
-# ---------------------------------------------------------------------------
-# Simulation fallback
-# ---------------------------------------------------------------------------
-
-class FlinkSimClient(FlinkClient):
-    """Returns a descriptive string — no real API calls. Used when FLINK_REST_URL is not set."""
-
-    def restart_job(self, job_id: str, pipeline_id: str) -> str:
-        logger.info("[FLINK] simulation mode — FLINK_REST_URL not set")
-        return f"Restarted job {job_id} on pipeline {pipeline_id} (simulated)"
+    def get_job_status(self, job_id: str) -> str:
+        """Return the current Flink job status string."""
+        data = self._get(f"/jobs/{job_id}")
+        return data.get("state", "UNKNOWN")
 
 
 # ---------------------------------------------------------------------------
-# Factory — called by executor
+# Factory — fails hard if FLINK_REST_URL not set (RESTART requires real Flink)
 # ---------------------------------------------------------------------------
 
-def get_flink_client() -> FlinkClient:
-    """Return the appropriate client based on environment configuration."""
-    if FLINK_REST_URL:
-        logger.info("[FLINK] using FlinkRestClient  url=%s", FLINK_REST_URL)
-        return FlinkRestClient(base_url=FLINK_REST_URL)
-    logger.info("[FLINK] FLINK_REST_URL not set — using FlinkSimClient")
-    return FlinkSimClient()
+def get_flink_client() -> FlinkRestClient:
+    """
+    Return FlinkRestClient.
+    Raises RuntimeError if FLINK_REST_URL is not set — RESTART requires a real Flink cluster.
+    Set FLINK_REST_URL in .env and run: cd docker && docker compose up
+    """
+    if not FLINK_REST_URL:
+        raise RuntimeError(
+            "FLINK_REST_URL is not set. RESTART strategy requires a real Flink cluster. "
+            "Add FLINK_REST_URL=http://localhost:8081 to .env and run: cd docker && docker compose up"
+        )
+    logger.info("[FLINK] using FlinkRestClient  url=%s", FLINK_REST_URL)
+    return FlinkRestClient(base_url=FLINK_REST_URL)

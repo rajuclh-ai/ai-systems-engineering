@@ -45,10 +45,18 @@ POST /incidents  (FastAPI)
          │                                            │ APPROVE
          ▼ ◄──────────────────────────────────────────┘
 ┌───────────────────┐
-│  Executor Node    │  RESTART → real Flink REST API (when FLINK_REST_URL set)
+│  Executor Node    │  RESTART → real Flink REST API (FLINK_REST_URL required)
 │                   │  REROUTE | SCHEMA_PATCH | QUARANTINE | SAVEPOINT_REDEPLOY → simulated
+│                   │  Tracks restart_attempts — falls back to FAILED after 2 attempts
 └────────┬──────────┘
          │
+         ▼
+┌───────────────────┐
+│ Verification Node │  RESTART only — polls GET /jobs/{new_job_id} every 5s for 60s
+│                   │  RUNNING within 60s → verified
+│                   │  Timeout / FAILED  → retry executor (max 1 retry) → ALERT_ONLY
+└────────┬──────────┘
+         │  verified / skipped
          ▼
 ┌───────────────────┐
 │  Learning Node    │  Writes IncidentRecord to SQLite
@@ -134,7 +142,7 @@ Risk score > 0.7 → Human approval required before execution.
 | Database | SQLite via SQLAlchemy |
 | Flink integration | httpx → Flink REST API |
 | Local Flink cluster | Docker Compose + StateMachineExample |
-| Testing | pytest (67 unit tests, all LLM calls mocked) + integration tests |
+| Testing | pytest (79 unit tests, all LLM calls mocked) + integration tests |
 | CI | GitHub Actions |
 | Package manager | uv |
 
@@ -153,9 +161,10 @@ self-healing-pipeline-agent/
 │   │   ├── diagnosis.py      # LLM root cause analysis
 │   │   ├── remediation.py    # LLM fix strategy selection
 │   │   ├── executor.py       # Fix execution (RESTART = real, others = simulated)
+│   │   ├── verification.py   # Polls Flink to confirm fix worked, triggers retry
 │   │   └── learning.py       # SQLite incident store
 │   └── tools/
-│       └── flink_client.py   # FlinkRestClient + FlinkSimClient
+│       └── flink_client.py   # FlinkRestClient — real httpx calls to Flink REST API
 ├── models/
 │   ├── events.py             # PipelineEvent + typed metrics per failure
 │   ├── diagnosis.py          # RootCause
@@ -204,6 +213,7 @@ self-healing-pipeline-agent/
 | Week 2 | Diagnosis, Remediation, Executor, Learning, graph wiring | ✅ Done |
 | Week 3 | FastAPI, approval endpoint, CI, README | ✅ Done |
 | Gap 1 | Real Flink RESTART via Docker + FlinkRestClient | ✅ Done |
+| Gap 7 | Verification node — polls Flink, retries on failure | ✅ Done |
 
 ---
 

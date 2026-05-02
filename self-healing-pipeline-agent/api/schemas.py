@@ -20,10 +20,19 @@ class TriggerIncidentRequest(BaseModel):
 class TriggerIncidentResponse(BaseModel):
     thread_id: str
     pipeline_id: str
-    anomaly_type: Optional[str]
-    severity: Optional[str]
-    status: str              # "resolved" | "awaiting_approval" | "failed"
-    risk_score: Optional[float]
+    status: str              # "processing" — agent runs in background
+
+
+class IncidentStatusResponse(BaseModel):
+    thread_id: str
+    pipeline_id: Optional[str] = None
+    status: str              # "processing" | "resolved" | "awaiting_approval" | "failed" | "rejected"
+    anomaly_type: Optional[str] = None
+    severity: Optional[str] = None
+    risk_score: Optional[float] = None
+    current_node: Optional[str] = None       # node currently executing (None when idle)
+    nodes_completed: Optional[list] = None   # ordered list of node names that have finished
+    error: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------

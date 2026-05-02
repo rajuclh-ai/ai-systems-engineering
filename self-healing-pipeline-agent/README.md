@@ -106,7 +106,7 @@ Risk score > 0.7 → Human approval required before execution.
 | All strategies except RESTART | REROUTE, SCHEMA_PATCH, QUARANTINE, SAVEPOINT_REDEPLOY remain simulated. |
 | SAVEPOINT_REDEPLOY with real Flink | Requires async polling loop — planned for a future iteration. |
 | Production authentication | No API key auth on endpoints — not the focus of this prototype. |
-| Async API under load | `graph.invoke()` is synchronous — concurrent incidents are not handled. |
+| Async API under load | Handled — `POST /incidents` returns immediately, agent runs in background, client polls `GET /incidents/{thread_id}/status`. |
 | Prometheus metrics | No counters or latency tracking — stdout logs only. |
 | Postgres | SQLite only — checkpoint state is persisted via SqliteSaver (upgrade path to Postgres deferred). |
 
@@ -216,6 +216,8 @@ self-healing-pipeline-agent/
 | Gap 1 | Real Flink RESTART via Docker + FlinkRestClient | ✅ Done |
 | Gap 7 | Verification node — polls Flink, retries on failure | ✅ Done |
 | Gap 3 | SqliteSaver — durable checkpoint state across restarts | ✅ Done |
+| Gap 2 | Async API — fire-and-return + GET status polling | ✅ Done |
+| Demo  | Rich terminal script — node-by-node progress, HITL prompt | ✅ Done (base) |
 
 ---
 
@@ -311,7 +313,7 @@ curl -s -X POST http://localhost:8000/approval/<thread_id> \
 ## API
 
 ### `POST /incidents`
-Trigger the agent with a pipeline failure event.
+Trigger the agent. Returns immediately — agent runs in the background.
 
 ```json
 {
@@ -325,7 +327,18 @@ Trigger the agent with a pipeline failure event.
 }
 ```
 
-Response:
+Response (instant):
+```json
+{
+  "thread_id": "abc-123",
+  "pipeline_id": "clickstream-flink-job-03",
+  "status": "processing"
+}
+```
+
+### `GET /incidents/{thread_id}/status`
+Poll for the agent result. Status transitions: `processing` → `resolved` | `awaiting_approval` | `failed`.
+
 ```json
 {
   "thread_id": "abc-123",

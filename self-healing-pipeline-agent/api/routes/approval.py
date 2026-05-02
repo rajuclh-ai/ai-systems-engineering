@@ -1,10 +1,14 @@
 """
 POST /approval/{thread_id} — human submits APPROVE or REJECT.
 Resumes a paused graph after human reviews high-risk remediation.
+Uses graph.stream() so remaining nodes are tracked in the status store
+and visible in the demo script.
 """
+import asyncio
 import logging
 from fastapi import APIRouter, HTTPException
 from api.schemas import ApprovalRequest, ApprovalResponse
+from api import status_store
 from agent.graph import graph
 
 router = APIRouter()
@@ -17,7 +21,7 @@ VALID_DECISIONS = {"APPROVE", "REJECT"}
 async def submit_approval(thread_id: str, request: ApprovalRequest):
     """
     Resume a paused agent after human reviews high-risk remediation.
-    Injects human_decision into state, then resumes graph execution.
+    Streams remaining nodes so the demo can show them completing in real time.
     """
     if request.decision not in VALID_DECISIONS:
         raise HTTPException(
@@ -28,18 +32,42 @@ async def submit_approval(thread_id: str, request: ApprovalRequest):
     config = {"configurable": {"thread_id": thread_id}}
 
     try:
-        # Inject human decision into the paused state
-        graph.update_state(
-            config,
-            {"human_decision": request.decision},
-        )
+        graph.update_state(config, {"human_decision": request.decision})
 
-        # Resume graph from where it paused
-        result = graph.invoke(None, config)
+        # Capture base nodes before resumption so we can append without duplication
+        base_nodes: list[str] = (status_store.get_status(thread_id) or {}).get("nodes_completed") or []
 
-        execution_result = result.get("execution_result")
+        def _stream_approval() -> dict:
+            approval_nodes: list[str] = []
+            final_values: dict = {}
+            for chunk in graph.stream(None, config, stream_mode="updates"):
+                node_name = list(chunk.keys())[0]
+                node_output = chunk[node_name] or {}
+                final_values.update(node_output)
+                approval_nodes.append(node_name)
+
+                current = status_store.get_status(thread_id) or {}
+                status_store.set_status(thread_id, {
+                    **current,
+                    "current_node": node_name,
+                    "nodes_completed": base_nodes + list(approval_nodes),
+                })
+            return final_values
+
+        loop = asyncio.get_event_loop()
+        final_values = await loop.run_in_executor(None, _stream_approval)
+
+        execution_result = final_values.get("execution_result")
         strategy = execution_result.strategy_executed if execution_result else None
         outcome = execution_result.status.value if execution_result else None
+
+        # Write final status
+        current = status_store.get_status(thread_id) or {}
+        status_store.set_status(thread_id, {
+            **current,
+            "status": "resolved" if request.decision == "APPROVE" else "rejected",
+            "current_node": None,
+        })
 
         logger.info(
             "Approval processed — thread=%s decision=%s outcome=%s",
@@ -51,7 +79,7 @@ async def submit_approval(thread_id: str, request: ApprovalRequest):
             decision=request.decision,
             strategy_executed=strategy,
             outcome=outcome,
-            incident_id=result.get("incident_id"),
+            incident_id=final_values.get("incident_id"),
         )
 
     except Exception as e:

@@ -143,9 +143,10 @@ Risk score > 0.7 → Human approval required before execution.
 | Database | SQLite via SQLAlchemy |
 | Flink integration | httpx → Flink REST API |
 | Local Flink cluster | Docker Compose + StateMachineExample |
-| Testing | pytest (79 unit tests, all LLM calls mocked) + integration tests |
+| Testing | pytest (82 unit tests, all LLM calls mocked) + integration tests |
 | CI | GitHub Actions |
 | Package manager | uv |
+| Demo | Rich terminal script — node-by-node live rendering |
 
 ---
 
@@ -174,8 +175,9 @@ self-healing-pipeline-agent/
 │   └── db.py                 # SQLAlchemy table definitions
 ├── api/
 │   ├── main.py               # FastAPI app
+│   ├── status_store.py       # In-memory {thread_id: status} — written by background tasks
 │   └── routes/
-│       ├── incidents.py      # POST /incidents — trigger agent
+│       ├── incidents.py      # POST /incidents + GET /incidents/{id}/status
 │       └── approval.py       # POST /approval — APPROVE | REJECT
 ├── docker/
 │   ├── docker-compose.yml    # Flink jobmanager + taskmanager + init
@@ -199,6 +201,7 @@ self-healing-pipeline-agent/
 │   ├── test_api.py
 │   └── integration/
 │       └── test_flink_executor.py  # Requires FLINK_REST_URL — skipped in CI
+├── demo.py                   # Rich terminal demo — node-by-node live rendering
 └── docs/
     └── Self-Healing Pipeline Agent.md   # Full requirements + session context
 ```
@@ -289,20 +292,46 @@ FLINK_REST_URL=http://localhost:8081 uv run pytest tests/integration/ -v
 
 ---
 
-## Simulated Scenarios (no Flink needed)
+## Demo (recommended)
 
 ```bash
-# LAG_SPIKE — auto-resolved, no approval
+# Runs both scenarios with live node-by-node rendering in the terminal
+uv run python demo.py
+
+# Run a single scenario
+uv run python demo.py --scenario 1   # lag_spike — auto-resolved
+uv run python demo.py --scenario 2   # restart_storm — pauses for human approval
+```
+
+---
+
+## Simulated Scenarios via curl (no Flink needed)
+
+POST /incidents returns immediately with `status=processing`.
+Poll GET /incidents/{thread_id}/status for the result.
+
+```bash
+# Step 1 — trigger LAG_SPIKE
 curl -s -X POST http://localhost:8000/incidents \
   -H "Content-Type: application/json" \
   -d @simulator/scenarios/lag_spike.json | jq
+# → {"thread_id": "abc-123", "status": "processing"}
 
+# Step 2 — poll for result
+curl -s http://localhost:8000/incidents/<thread_id>/status | jq
+# → {"status": "resolved", "anomaly_type": "lag_spike", ...}
+```
+
+```bash
 # RESTART_STORM — pauses for human approval
 curl -s -X POST http://localhost:8000/incidents \
   -H "Content-Type: application/json" \
   -d @simulator/scenarios/restart_storm.json | jq
 
-# Approve (use thread_id from above response)
+# Poll until status=awaiting_approval
+curl -s http://localhost:8000/incidents/<thread_id>/status | jq
+
+# Approve
 curl -s -X POST http://localhost:8000/approval/<thread_id> \
   -H "Content-Type: application/json" \
   -d '{"decision": "APPROVE"}' | jq
@@ -345,7 +374,9 @@ Poll for the agent result. Status transitions: `processing` → `resolved` | `aw
   "status": "resolved",
   "anomaly_type": "lag_spike",
   "severity": "critical",
-  "risk_score": 0.6
+  "risk_score": 0.6,
+  "nodes_completed": ["monitor", "diagnosis", "remediation", "executor", "verification", "learning"],
+  "current_node": null
 }
 ```
 

@@ -172,9 +172,9 @@ def _print_node(node: str, detail, *, cyan: bool = False) -> None:
     out_label = detail.get("label") or "output"
     output    = [o for o in (detail.get("output") or []) if o]
     if output:
-        console.print(Text(f"       {out_label}:", style=f"bold {color}"))
+        console.print(Text(f"       {out_label}:", style="bold yellow"))
         for line in output:
-            console.print(Text(f"{indent}{line}", style=f"bold {color}"))
+            console.print(Text(f"{indent}{line}", style="yellow"))
 
     console.print()  # blank line between nodes
 

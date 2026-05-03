@@ -294,36 +294,70 @@ FLINK_REST_URL=http://localhost:8081 uv run pytest tests/integration/ -v
 
 ## Demo (recommended)
 
+Three scenarios — each shows a different agent capability.
+
+| Scenario | Failure | Strategy | HITL | Flink |
+|---|---|---|---|---|
+| 1 | Consumer lag spike | RESTART or REROUTE | No | Simulated |
+| 2 | Restart storm | SAVEPOINT_REDEPLOY | **Yes** | Simulated |
+| 3 | Kafka repartition → incompatible checkpoint | RESTART (cancel + resubmit) | No | **Real** |
+
 ```bash
-# Runs both scenarios with live node-by-node rendering in the terminal
+# Run all simulated scenarios back-to-back (1 + 2)
 uv run python demo.py
 
 # Run a single scenario
-uv run python demo.py --scenario 1   # lag_spike — auto-resolved
+uv run python demo.py --scenario 1   # lag_spike — auto-resolved, no approval
 uv run python demo.py --scenario 2   # restart_storm — pauses for human approval
+uv run python demo.py --scenario 3   # real Flink — cancel + resubmit, verification polling
 ```
+
+Each scenario shows the curl command sent to `POST /incidents` before triggering — press Enter to send.
+
+### Scenario 3 prerequisites
+
+```bash
+# Terminal 1 — start Flink
+cd docker && docker compose down && docker compose up
+
+# Verify a job is running
+curl -s http://localhost:8081/jobs | jq '.jobs[] | select(.status=="RUNNING") | .id'
+
+# Terminal 2 — start the API (with FLINK_REST_URL set)
+# Add to .env: FLINK_REST_URL=http://localhost:8081
+uv run uvicorn api.main:app --reload
+
+# Terminal 3 — run the demo
+uv run python demo.py --scenario 3
+```
+
+The demo auto-detects the running Flink job ID. Watch `http://localhost:8081` — the job goes `RUNNING → CANCELED → RUNNING` as the agent cancels the incompatible job and resubmits a clean one.
 
 ---
 
-## Simulated Scenarios via curl (no Flink needed)
+## Running Scenarios Manually via curl
 
-POST /incidents returns immediately with `status=processing`.
-Poll GET /incidents/{thread_id}/status for the result.
+`POST /incidents` returns immediately with `status=processing`.
+Poll `GET /incidents/{thread_id}/status` until status changes.
+
+### Scenario 1 — Consumer Lag Spike (simulated, auto-resolved)
 
 ```bash
-# Step 1 — trigger LAG_SPIKE
+# Trigger
 curl -s -X POST http://localhost:8000/incidents \
   -H "Content-Type: application/json" \
   -d @simulator/scenarios/lag_spike.json | jq
 # → {"thread_id": "abc-123", "status": "processing"}
 
-# Step 2 — poll for result
+# Poll for result
 curl -s http://localhost:8000/incidents/<thread_id>/status | jq
 # → {"status": "resolved", "anomaly_type": "lag_spike", ...}
 ```
 
+### Scenario 2 — Restart Storm (simulated, human approval required)
+
 ```bash
-# RESTART_STORM — pauses for human approval
+# Trigger
 curl -s -X POST http://localhost:8000/incidents \
   -H "Content-Type: application/json" \
   -d @simulator/scenarios/restart_storm.json | jq
@@ -331,10 +365,51 @@ curl -s -X POST http://localhost:8000/incidents \
 # Poll until status=awaiting_approval
 curl -s http://localhost:8000/incidents/<thread_id>/status | jq
 
-# Approve
+# Approve (or REJECT)
 curl -s -X POST http://localhost:8000/approval/<thread_id> \
   -H "Content-Type: application/json" \
   -d '{"decision": "APPROVE"}' | jq
+```
+
+### Scenario 3 — Kafka Repartition → Incompatible Checkpoint (real Flink)
+
+Requires Flink running and `FLINK_REST_URL=http://localhost:8081` in `.env`.
+
+```bash
+# Step 1 — get the real Flink job ID
+JOB_ID=$(curl -s http://localhost:8081/jobs \
+  | jq -r '.jobs[] | select(.status=="RUNNING") | .id' \
+  | head -1)
+echo "job_id: $JOB_ID"
+
+# Step 2 — trigger the incident
+# Simulates: Kafka topic repartitioned 8→12 partitions, checkpoint state incompatible,
+# Flink auto-recovery already failed twice. Agent cancels the stuck job and
+# resubmits a clean one (no checkpoint restore).
+THREAD_ID=$(curl -s -X POST http://localhost:8000/incidents \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"pipeline_id\": \"payment-pipeline-07\",
+    \"event_type\":  \"job_failure\",
+    \"metrics\": {
+      \"job_id\":               \"$JOB_ID\",
+      \"error_code\":           \"STATE_INCOMPATIBLE\",
+      \"restart_count\":        2,
+      \"failure_cause\":        \"Kafka topic repartitioned 8 → 12 partitions — operator state incompatible with new topology\",
+      \"error_message\":        \"Checkpoint restore failed — KeyGroupRangeOffsetOutOfBoundsException: stored state incompatible with current partition count\",
+      \"topic\":                \"payment-events\",
+      \"partition_count_old\":  8,
+      \"partition_count_new\":  12
+    }
+  }" | jq -r '.thread_id')
+echo "thread_id: $THREAD_ID"
+
+# Step 3 — watch the Flink UI while polling
+# http://localhost:8081 — job goes RUNNING → CANCELED → RUNNING
+curl -s http://localhost:8000/incidents/$THREAD_ID/status | jq
+
+# Step 4 — poll until resolved
+watch -n 2 "curl -s http://localhost:8000/incidents/$THREAD_ID/status | jq '.status,.nodes_completed'"
 ```
 
 ---

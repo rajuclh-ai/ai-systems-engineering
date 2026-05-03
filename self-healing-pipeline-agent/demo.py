@@ -107,6 +107,34 @@ def _spin() -> str:
     return SPINNER_FRAMES[_frame]
 
 
+def _print_curl_panel(payload: dict, pause: bool = True) -> None:
+    """
+    Show the curl command that will be sent to POST /incidents.
+    If pause=True, wait for Enter before returning so audience can read it.
+    """
+    body = json.dumps(payload, indent=2)
+    # Indent body lines for display inside the panel
+    body_lines = "\n".join(f"    {line}" for line in body.splitlines())
+    curl_cmd = (
+        f"[bold cyan]curl[/bold cyan] -s -X POST {BASE_URL}/incidents \\\n"
+        f"  -H [green]'Content-Type: application/json'[/green] \\\n"
+        f"  -d [yellow]'{body_lines}'[/yellow]"
+    )
+    console.print(Panel(
+        curl_cmd,
+        title="[bold]curl  POST /incidents[/bold]",
+        border_style="dim",
+        padding=(0, 2),
+    ))
+    console.print()
+    if pause:
+        try:
+            input("  Press Enter to send... ")
+        except (KeyboardInterrupt, EOFError):
+            raise SystemExit(0)
+        console.print()
+
+
 def _print_node(node: str, detail, *, cyan: bool = False) -> None:
     """
     Print a completed node with structured received / output sections.
@@ -191,8 +219,9 @@ def run_scenario(index: int, total: int, scenario: dict) -> None:
     payload = json.loads(Path(scenario["file"]).read_text())
     console.print(f"  [dim]pipeline: {payload.get('pipeline_id', '')}[/dim]\n")
 
-    # 1 — Trigger
-    console.print("  [cyan]▸[/cyan] Triggering incident...\n")
+    # 1 — Show curl command, pause for audience, then trigger
+    _print_curl_panel(payload, pause=True)
+    console.print("  [cyan]▸[/cyan] Sending...\n")
     t_start = time.time()
     thread_id = trigger_incident(payload)
 
@@ -302,11 +331,11 @@ def _get_flink_job_id() -> str | None:
 def run_flink_scenario(index: int, total: int) -> None:
     console.print()
     console.print(Rule(
-        f"[bold]Scenario {index}/{total}  ·  Real Flink Job Restart[/bold]",
+        f"[bold]Scenario {index}/{total}  ·  Kafka Repartition → Incompatible Checkpoint State[/bold]",
         style="cyan",
     ))
-    console.print("  [dim]live RESTART · real Flink REST API · strategy=RESTART · "
-                  "verification=real polling[/dim]\n")
+    console.print("  [dim]Kafka topic repartitioned 8→12 · checkpoint state incompatible · "
+                  "Flink auto-recovery failed twice · agent cancels + resubmits fresh · real Flink polling[/dim]\n")
 
     # ── Pre-flight checks ────────────────────────────────────────────────────
     flink_url = os.environ.get("FLINK_REST_URL") or os.environ.get("FLINK_REST_URL", "")
@@ -357,6 +386,10 @@ def run_flink_scenario(index: int, total: int) -> None:
     console.print(Panel(
         f"[bold cyan]Open the Flink UI now[/bold cyan]\n\n"
         f"  [bold]{FLINK_UI}[/bold]\n\n"
+        f"Scenario: Kafka topic [bold]payment-events[/bold] was repartitioned [bold red]8 → 12 partitions[/bold red].\n"
+        f"Flink's checkpoint state is incompatible with the new partition topology.\n"
+        f"Auto-recovery failed twice — the checkpoint itself is the problem.\n\n"
+        f"Agent will cancel the stuck job and resubmit a clean one (no checkpoint restore).\n\n"
         f"Watch the job go:  [bold]RUNNING[/bold]  →  [bold red]CANCELED[/bold red]  →  [bold green]RUNNING[/bold green]\n"
         f"[dim]job_id: {job_id}[/dim]",
         title="[bold cyan]🔗  Flink UI[/bold cyan]",
@@ -372,25 +405,28 @@ def run_flink_scenario(index: int, total: int) -> None:
 
     # ── Build payload with real job ID ───────────────────────────────────────
     payload = {
-        "pipeline_id": "enrichment-job-05",
+        "pipeline_id": "payment-pipeline-07",
         "event_type":  "job_failure",
         "metrics": {
-            "job_id":        job_id,
-            "error_code":    "NPE",
-            "restart_count": 1,
-            "error_message": "NullPointerException in EnrichmentMapper",
+            "job_id":              job_id,
+            "error_code":          "STATE_INCOMPATIBLE",
+            "restart_count":       2,
+            "failure_cause":       "Kafka topic repartitioned 8 → 12 partitions — operator state incompatible with new topology",
+            "error_message":       "Checkpoint restore failed — KeyGroupRangeOffsetOutOfBoundsException: stored state incompatible with current partition count",
+            "topic":               "payment-events",
+            "partition_count_old": 8,
+            "partition_count_new": 12,
         },
     }
 
-    # ── Trigger ──────────────────────────────────────────────────────────────
-    console.print(f"  [cyan]▸[/cyan] Triggering job_failure incident...\n")
-    console.print(f"  [dim]pipeline: {payload['pipeline_id']}[/dim]")
-    console.print(f"  [dim]job_id:   {job_id}[/dim]\n")
+    # ── Show curl command, pause, then trigger ───────────────────────────────
+    _print_curl_panel(payload, pause=True)
+    console.print(f"  [cyan]▸[/cyan] Sending...\n")
 
     t_start   = time.time()
     thread_id = trigger_incident(payload)
 
-    console.print("  [dim]▸ Watch the Flink UI — job cancel + resubmit happening now[/dim]\n")
+    console.print("  [dim]▸ Watch the Flink UI — agent canceling incompatible job, resubmitting clean[/dim]\n")
 
     # ── Spinner while agent runs ──────────────────────────────────────────────
     data    = _poll_until_done(thread_id, t_start)

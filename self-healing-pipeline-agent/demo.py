@@ -1,16 +1,31 @@
 #!/usr/bin/env python3
 """
 Self-Healing Pipeline Agent — Live Demo
-Runs two scenarios and renders the agent flow node by node in the terminal.
+
+Flow per scenario:
+  1. Trigger incident (POST /incidents)
+  2. Spinner while agent runs — audience knows something is happening
+  3. Agent finishes → replay decisions node by node with 1s pause
+  4. For HITL: pause, show approval panel, prompt, resume, replay remaining nodes
+  5. Final summary panel
+
+Scenario 3 (real Flink):
+  - Requires Docker Flink cluster running (cd docker && docker compose up)
+  - Requires FLINK_REST_URL=http://localhost:8081 in .env
+  - Auto-detects running Flink job ID
+  - Shows "Watch Flink UI" panel before triggering
+  - Verification node shows real polling result (RUNNING ✓) not skipped
 
 Usage:
-    uv run python demo.py               # lag_spike + restart_storm
-    uv run python demo.py --scenario 1  # lag_spike only
-    uv run python demo.py --scenario 2  # restart_storm only (HITL)
+    uv run python demo.py               # scenarios 1 + 2 (simulated)
+    uv run python demo.py --scenario 1  # lag_spike — auto-resolved
+    uv run python demo.py --scenario 2  # restart_storm — HITL approval
+    uv run python demo.py --scenario 3  # real Flink job restart + verification
 
-Requires: uv run uvicorn api.main:app --reload  (in another terminal)
+Requires: uv run uvicorn api.main:app --reload  (separate terminal)
 """
 import json
+import os
 import sys
 import time
 import argparse
@@ -20,28 +35,15 @@ import httpx
 from rich.console import Console
 from rich.live import Live
 from rich.panel import Panel
-from rich.prompt import Confirm
-from rich.text import Text
+from rich.prompt import Confirm, Prompt
 from rich.rule import Rule
+from rich.text import Text
 
 BASE_URL = "http://localhost:8000"
-POLL_INTERVAL = 0.4  # seconds between status polls
+POLL_INTERVAL = 0.2   # seconds between status polls while agent runs
+REPLAY_PAUSE  = 1.0   # seconds between each node line during replay
 
 console = Console()
-
-# ---------------------------------------------------------------------------
-# Node display config
-# ---------------------------------------------------------------------------
-
-NODE_ORDER = [
-    "monitor",
-    "diagnosis",
-    "remediation",
-    "human_checkpoint",
-    "executor",
-    "verification",
-    "learning",
-]
 
 NODE_LABELS = {
     "monitor":          "Monitor            rule-based anomaly classification",
@@ -55,17 +57,16 @@ NODE_LABELS = {
 
 SCENARIOS = [
     {
-        "name": "Consumer Lag Spike",
+        "name":     "Consumer Lag Spike",
         "subtitle": "auto-resolved · strategy=RESTART · risk=0.30 · no approval needed",
-        "file": "simulator/scenarios/lag_spike.json",
+        "file":     "simulator/scenarios/lag_spike.json",
     },
     {
-        "name": "Restart Storm",
+        "name":     "Restart Storm",
         "subtitle": "high risk · strategy=SAVEPOINT_REDEPLOY · risk=0.85 · pauses for approval",
-        "file": "simulator/scenarios/restart_storm.json",
+        "file":     "simulator/scenarios/restart_storm.json",
     },
 ]
-
 
 # ---------------------------------------------------------------------------
 # API helpers
@@ -83,59 +84,96 @@ def get_status(thread_id: str) -> dict:
     return resp.json()
 
 
-def submit_approval(thread_id: str, decision: str) -> dict:
+def submit_approval(thread_id: str, decision: str) -> None:
     resp = httpx.post(
         f"{BASE_URL}/approval/{thread_id}",
         json={"decision": decision},
         timeout=120,
     )
     resp.raise_for_status()
-    return resp.json()
 
 
 # ---------------------------------------------------------------------------
-# Rendering
+# Rendering helpers
 # ---------------------------------------------------------------------------
 
 SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
-_frame_idx = 0
+_frame = 0
 
 
-def _spinner() -> str:
-    global _frame_idx
-    _frame_idx = (_frame_idx + 1) % len(SPINNER_FRAMES)
-    return SPINNER_FRAMES[_frame_idx]
+def _spin() -> str:
+    global _frame
+    _frame = (_frame + 1) % len(SPINNER_FRAMES)
+    return SPINNER_FRAMES[_frame]
 
 
-def render_nodes(nodes_completed: list[str], current_node: str | None, paused: bool = False) -> Text:
-    text = Text()
-    completed_set = set(nodes_completed)
+def _print_node(node: str, detail, *, cyan: bool = False) -> None:
+    """
+    Print a completed node with structured received / output sections.
+    `detail` is either:
+      - a dict: {"received": [...], "label": str, "output": [...]}
+      - a str or None: legacy fallback
+    """
+    label = NODE_LABELS.get(node, node)
+    color = "cyan" if cyan else "green"
 
-    for node in NODE_ORDER:
-        label = NODE_LABELS[node]
+    header = Text()
+    header.append(f"  ✓  ", style=f"bold {color}")
+    header.append(label, style=color)
+    console.print(header)
 
-        if node in completed_set:
-            if node == "human_checkpoint":
-                # Show human_checkpoint as approved/acted upon
-                text.append("  ✓  ", style="bold cyan")
-                text.append(f"{label}\n", style="cyan")
-            else:
-                text.append("  ✓  ", style="bold green")
-                text.append(f"{label}\n", style="green")
+    if not detail:
+        return
 
-        elif node == current_node:
-            if paused:
-                text.append("  ⏸  ", style="bold yellow")
-                text.append(f"{label}\n", style="bold yellow")
-            else:
-                text.append(f"  {_spinner()}  ", style="bold yellow")
-                text.append(f"{label}\n", style="yellow")
+    # Legacy string fallback
+    if isinstance(detail, str):
+        console.print(Text(f"       → {detail}", style="dim"))
+        return
 
-        else:
-            text.append("     ", style="dim")
-            text.append(f"{label}\n", style="dim")
+    # Structured dict: received + output
+    indent = "         "
 
-    return text
+    received = [r for r in (detail.get("received") or []) if r]
+    if received:
+        console.print(Text(f"       received:", style="dim"))
+        for line in received:
+            console.print(Text(f"{indent}{line}", style="dim"))
+
+    out_label = detail.get("label") or "output"
+    output    = [o for o in (detail.get("output") or []) if o]
+    if output:
+        console.print(Text(f"       {out_label}:", style="bold dim"))
+        for line in output:
+            console.print(Text(f"{indent}{line}", style="white"))
+
+    console.print()  # blank line between nodes
+
+
+def _poll_until_done(thread_id: str, t_start: float) -> dict:
+    """Show a spinner while the agent runs, return final status data."""
+    status = "processing"
+    data: dict = {}
+    with Live(console=console, refresh_per_second=10) as live:
+        while status == "processing":
+            elapsed = time.time() - t_start
+            live.update(Text(
+                f"  {_spin()}  Agent running...  {elapsed:.1f}s",
+                style="dim",
+            ))
+            time.sleep(POLL_INTERVAL)
+            data = get_status(thread_id)
+            status = data.get("status", "processing")
+    return data
+
+
+def _replay_nodes(nodes: list[str], details: dict) -> None:
+    """Print nodes one by one with a pause between each — the core demo effect."""
+    console.print()
+    console.print("  [dim]▸ Replaying agent decisions...[/dim]\n")
+    for node in nodes:
+        detail = details.get(node, "")
+        _print_node(node, detail, cyan=(node == "human_checkpoint"))
+        time.sleep(REPLAY_PAUSE)
 
 
 # ---------------------------------------------------------------------------
@@ -148,45 +186,40 @@ def run_scenario(index: int, total: int, scenario: dict) -> None:
         f"[bold]Scenario {index}/{total}  ·  {scenario['name']}[/bold]",
         style="cyan",
     ))
-    console.print(f"  [dim]{scenario['subtitle']}[/dim]\n")
+    console.print(f"  [dim]{scenario['subtitle']}[/dim]")
 
     payload = json.loads(Path(scenario["file"]).read_text())
-    console.print(f"  [dim]pipeline:[/dim] {payload.get('pipeline_id', '')}")
-    console.print()
+    console.print(f"  [dim]pipeline: {payload.get('pipeline_id', '')}[/dim]\n")
 
-    # --- Trigger ---
+    # 1 — Trigger
     console.print("  [cyan]▸[/cyan] Triggering incident...\n")
     t_start = time.time()
     thread_id = trigger_incident(payload)
 
-    # --- Live polling loop ---
-    nodes_completed: list[str] = []
-    current_node: str | None = None
-    status = "processing"
+    # 2 — Spinner while agent runs
+    data = _poll_until_done(thread_id, t_start)
+    status        = data.get("status", "failed")
+    nodes         = data.get("nodes_completed") or []
+    details       = data.get("node_details") or {}
+    elapsed       = time.time() - t_start
 
-    with Live(render_nodes([], None), console=console, refresh_per_second=6) as live:
-        while status == "processing":
-            time.sleep(POLL_INTERVAL)
-            data = get_status(thread_id)
-            status = data.get("status", "processing")
-            nodes_completed = data.get("nodes_completed") or []
-            current_node = data.get("current_node")
-            live.update(render_nodes(nodes_completed, current_node, paused=(status == "awaiting_approval")))
-
-        # Final render
-        live.update(render_nodes(nodes_completed, None))
-
-    elapsed = time.time() - t_start
-
-    # --- HITL flow ---
+    # 3 — Replay pre-approval nodes (or all nodes for non-HITL)
+    pre_nodes = nodes  # for non-HITL this is everything
     if status == "awaiting_approval":
-        data = get_status(thread_id)
+        # Replay only the nodes that ran before the pause
+        pre_nodes = [n for n in nodes if n not in ("executor", "verification", "learning")]
+
+    _replay_nodes(pre_nodes, details)
+
+    # 4 — HITL approval flow
+    if status == "awaiting_approval":
         risk = data.get("risk_score")
         risk_str = f"{risk:.2f}" if risk is not None else "?"
 
         console.print()
         console.print(Panel(
             f"[bold]Risk score {risk_str}[/bold] exceeds threshold [dim](0.70)[/dim]\n"
+            f"Strategy requires human sign-off before execution.\n"
             f"[dim]thread: {thread_id}[/dim]",
             title="[bold yellow]⏸  AWAITING APPROVAL[/bold yellow]",
             border_style="yellow",
@@ -199,33 +232,191 @@ def run_scenario(index: int, total: int, scenario: dict) -> None:
         console.print()
         console.print(f"  [cyan]▸[/cyan] Submitting {decision}...\n")
 
-        t_approval = time.time()
+        # Resume agent — spinner while it finishes
+        t_resume = time.time()
         submit_approval(thread_id, decision)
-        elapsed += time.time() - t_approval
+        elapsed += time.time() - t_resume
 
-        # Refresh node list after approval
+        # Get updated nodes after approval
         data = get_status(thread_id)
-        nodes_completed = data.get("nodes_completed") or []
-        status = data.get("status", "resolved")
+        status        = data.get("status", "resolved")
+        nodes_after   = data.get("nodes_completed") or []
+        details_after = data.get("node_details") or {}
 
-        console.print(render_nodes(nodes_completed, None))
+        # Replay only the nodes that ran after approval
+        post_nodes = [n for n in nodes_after if n not in pre_nodes]
+        if post_nodes:
+            console.print()
+            console.print("  [dim]▸ Resuming after approval...[/dim]\n")
+            _replay_nodes(post_nodes, details_after)
 
-    # --- Final summary ---
-    data = get_status(thread_id)
+        nodes   = nodes_after
+        details = details_after
+
+    # 5 — Final summary
     anomaly  = data.get("anomaly_type") or "—"
     severity = data.get("severity") or "—"
     risk     = data.get("risk_score")
     risk_str = f"{risk:.2f}" if risk is not None else "—"
 
+    console.print()
     if status in ("resolved", "rejected"):
         icon  = "✅  RESOLVED" if status == "resolved" else "🚫  REJECTED"
         color = "green" if status == "resolved" else "red"
         console.print(Panel(
             f"anomaly   [bold]{anomaly}[/bold]  ·  severity  [bold]{severity}[/bold]\n"
-            f"risk      [bold]{risk_str}[/bold]  ·  nodes     [bold]{len(nodes_completed)}[/bold] completed\n"
+            f"risk      [bold]{risk_str}[/bold]  ·  nodes     [bold]{len(nodes)}[/bold] completed\n"
             f"[dim]thread: {thread_id}[/dim]",
             title=f"[bold {color}]{icon}[/bold {color}]  [dim]{elapsed:.1f}s[/dim]",
             border_style=color,
+            padding=(0, 2),
+        ))
+    else:
+        error = data.get("error", "unknown error")
+        console.print(Panel(
+            f"[red]{error}[/red]\n[dim]thread: {thread_id}[/dim]",
+            title="[bold red]❌  FAILED[/bold red]",
+            border_style="red",
+            padding=(0, 2),
+        ))
+
+
+# ---------------------------------------------------------------------------
+# Scenario 3 — Real Flink job restart
+# ---------------------------------------------------------------------------
+
+FLINK_UI = "http://localhost:8081"
+
+
+def _get_flink_job_id() -> str | None:
+    """Auto-detect the first RUNNING job from Flink REST API."""
+    try:
+        resp = httpx.get(f"{FLINK_UI}/jobs", timeout=5)
+        resp.raise_for_status()
+        running = [j for j in resp.json().get("jobs", []) if j.get("status") == "RUNNING"]
+        return running[0]["id"] if running else None
+    except Exception:
+        return None
+
+
+def run_flink_scenario(index: int, total: int) -> None:
+    console.print()
+    console.print(Rule(
+        f"[bold]Scenario {index}/{total}  ·  Real Flink Job Restart[/bold]",
+        style="cyan",
+    ))
+    console.print("  [dim]live RESTART · real Flink REST API · strategy=RESTART · "
+                  "verification=real polling[/dim]\n")
+
+    # ── Pre-flight checks ────────────────────────────────────────────────────
+    flink_url = os.environ.get("FLINK_REST_URL") or os.environ.get("FLINK_REST_URL", "")
+    if not flink_url:
+        # Try reading from .env manually
+        env_path = Path(".env")
+        if env_path.exists():
+            for line in env_path.read_text().splitlines():
+                if line.startswith("FLINK_REST_URL="):
+                    flink_url = line.split("=", 1)[1].strip()
+                    break
+
+    if not flink_url:
+        console.print(Panel(
+            "[bold red]FLINK_REST_URL is not set.[/bold red]\n"
+            "Add to .env:  FLINK_REST_URL=http://localhost:8081\n"
+            "Then restart the API server.",
+            border_style="red", padding=(0, 2),
+        ))
+        return
+
+    # Check Flink cluster is reachable
+    try:
+        httpx.get(f"{FLINK_UI}/jobs", timeout=4).raise_for_status()
+    except Exception:
+        console.print(Panel(
+            f"[bold red]Flink cluster not reachable at {FLINK_UI}[/bold red]\n"
+            "Start it with:\n"
+            "  cd docker && docker compose up",
+            border_style="red", padding=(0, 2),
+        ))
+        return
+
+    # Auto-detect running job ID
+    job_id = _get_flink_job_id()
+    if job_id:
+        console.print(f"  [dim]auto-detected job:[/dim]  [bold]{job_id}[/bold]")
+        console.print()
+    else:
+        console.print("  [yellow]No RUNNING job detected. Enter job ID manually:[/yellow]")
+        job_id = Prompt.ask("  job_id").strip()
+        if not job_id:
+            console.print("[red]No job ID provided — skipping scenario 3.[/red]")
+            return
+        console.print()
+
+    # ── Flink UI banner — give audience time to open browser ─────────────────
+    console.print(Panel(
+        f"[bold cyan]Open the Flink UI now[/bold cyan]\n\n"
+        f"  [bold]{FLINK_UI}[/bold]\n\n"
+        f"Watch the job go:  [bold]RUNNING[/bold]  →  [bold red]CANCELED[/bold red]  →  [bold green]RUNNING[/bold green]\n"
+        f"[dim]job_id: {job_id}[/dim]",
+        title="[bold cyan]🔗  Flink UI[/bold cyan]",
+        border_style="cyan",
+        padding=(1, 4),
+    ))
+    console.print()
+    try:
+        input("  Press Enter when the Flink UI is open... ")
+    except (KeyboardInterrupt, EOFError):
+        return
+    console.print()
+
+    # ── Build payload with real job ID ───────────────────────────────────────
+    payload = {
+        "pipeline_id": "enrichment-job-05",
+        "event_type":  "job_failure",
+        "metrics": {
+            "job_id":        job_id,
+            "error_code":    "NPE",
+            "restart_count": 1,
+            "error_message": "NullPointerException in EnrichmentMapper",
+        },
+    }
+
+    # ── Trigger ──────────────────────────────────────────────────────────────
+    console.print(f"  [cyan]▸[/cyan] Triggering job_failure incident...\n")
+    console.print(f"  [dim]pipeline: {payload['pipeline_id']}[/dim]")
+    console.print(f"  [dim]job_id:   {job_id}[/dim]\n")
+
+    t_start   = time.time()
+    thread_id = trigger_incident(payload)
+
+    console.print("  [dim]▸ Watch the Flink UI — job cancel + resubmit happening now[/dim]\n")
+
+    # ── Spinner while agent runs ──────────────────────────────────────────────
+    data    = _poll_until_done(thread_id, t_start)
+    status  = data.get("status", "failed")
+    nodes   = data.get("nodes_completed") or []
+    details = data.get("node_details") or {}
+    elapsed = time.time() - t_start
+
+    # ── Replay all nodes ──────────────────────────────────────────────────────
+    _replay_nodes(nodes, details)
+
+    # ── Final summary ─────────────────────────────────────────────────────────
+    anomaly  = data.get("anomaly_type") or "—"
+    severity = data.get("severity")     or "—"
+    risk     = data.get("risk_score")
+    risk_str = f"{risk:.2f}" if risk is not None else "—"
+
+    console.print()
+    if status == "resolved":
+        console.print(Panel(
+            f"anomaly   [bold]{anomaly}[/bold]  ·  severity  [bold]{severity}[/bold]\n"
+            f"risk      [bold]{risk_str}[/bold]  ·  nodes     [bold]{len(nodes)}[/bold] completed\n"
+            f"[dim]Flink job is back RUNNING — check {FLINK_UI}[/dim]\n"
+            f"[dim]thread: {thread_id}[/dim]",
+            title=f"[bold green]✅  RESOLVED[/bold green]  [dim]{elapsed:.1f}s[/dim]",
+            border_style="green",
             padding=(0, 2),
         ))
     else:
@@ -243,46 +434,48 @@ def run_scenario(index: int, total: int, scenario: dict) -> None:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Self-Healing Pipeline Agent demo")
-    parser.add_argument("--scenario", type=int, choices=[1, 2],
-                        help="Run a single scenario (1=lag_spike, 2=restart_storm)")
+    parser = argparse.ArgumentParser(description="Self-Healing Pipeline Agent — live demo")
+    parser.add_argument(
+        "--scenario", type=int, choices=[1, 2, 3],
+        help="1=lag_spike (auto)  2=restart_storm (HITL)  3=real Flink restart",
+    )
     args = parser.parse_args()
 
-    # Header
     console.print()
     console.print(Panel(
         "[bold cyan]Self-Healing Pipeline Agent[/bold cyan]  —  Live Demo\n"
-        "[dim]Autonomous detection · LLM diagnosis · real-time remediation[/dim]",
+        "[dim]Autonomous detection  ·  LLM diagnosis  ·  real-time remediation[/dim]",
         border_style="cyan",
         padding=(0, 4),
     ))
 
-    # Health check
     try:
         httpx.get(f"{BASE_URL}/health", timeout=3).raise_for_status()
     except Exception:
         console.print()
         console.print("[bold red]  ✗  API not reachable at http://localhost:8000[/bold red]")
-        console.print("  [dim]Start with: uv run uvicorn api.main:app --reload[/dim]")
+        console.print("  [dim]Run: uv run uvicorn api.main:app --reload[/dim]")
         sys.exit(1)
 
-    scenarios = [SCENARIOS[args.scenario - 1]] if args.scenario else SCENARIOS
-    total = len(scenarios)
-
-    for i, scenario in enumerate(scenarios, 1):
-        run_scenario(i, total, scenario)
-        if i < total:
-            console.print()
-            try:
-                input("  Press Enter for next scenario... ")
-            except (KeyboardInterrupt, EOFError):
-                break
-            console.print()
+    # Scenario 3 is handled separately (requires Flink)
+    if args.scenario == 3:
+        run_flink_scenario(1, 1)
+    else:
+        scenarios = [SCENARIOS[args.scenario - 1]] if args.scenario else SCENARIOS
+        total     = len(scenarios)
+        for i, scenario in enumerate(scenarios, 1):
+            run_scenario(i, total, scenario)
+            if i < total:
+                console.print()
+                try:
+                    input("  Press Enter for next scenario... ")
+                except (KeyboardInterrupt, EOFError):
+                    break
 
     console.print()
     console.print(Panel(
         "[bold cyan]Demo complete.[/bold cyan]\n"
-        "[dim]Full traces available in LangSmith (set LANGCHAIN_TRACING_V2=true)[/dim]",
+        "[dim]Full LLM traces available in LangSmith (LANGCHAIN_TRACING_V2=true)[/dim]",
         border_style="cyan",
         padding=(0, 4),
     ))

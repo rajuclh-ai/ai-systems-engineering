@@ -34,23 +34,33 @@ async def submit_approval(thread_id: str, request: ApprovalRequest):
     try:
         graph.update_state(config, {"human_decision": request.decision})
 
-        # Capture base nodes before resumption so we can append without duplication
-        base_nodes: list[str] = (status_store.get_status(thread_id) or {}).get("nodes_completed") or []
+        # Capture base state before resumption to avoid duplication
+        base_store = status_store.get_status(thread_id) or {}
+        base_nodes: list[str] = base_store.get("nodes_completed") or []
+        base_details: dict = base_store.get("node_details") or {}
 
         def _stream_approval() -> dict:
+            from api.routes.incidents import _extract_node_detail
             approval_nodes: list[str] = []
+            approval_details: dict = {}
+            # Seed accumulated with base state so detail extractor has full context
+            accumulated: dict = dict(base_store.get("_initial_state") or {})
+            accumulated.update(base_store)
             final_values: dict = {}
             for chunk in graph.stream(None, config, stream_mode="updates"):
                 node_name = list(chunk.keys())[0]
                 node_output = chunk[node_name] or {}
                 final_values.update(node_output)
+                accumulated.update(node_output)
                 approval_nodes.append(node_name)
+                approval_details[node_name] = _extract_node_detail(node_name, node_output, accumulated)
 
                 current = status_store.get_status(thread_id) or {}
                 status_store.set_status(thread_id, {
                     **current,
                     "current_node": node_name,
                     "nodes_completed": base_nodes + list(approval_nodes),
+                    "node_details": {**base_details, **approval_details},
                 })
             return final_values
 

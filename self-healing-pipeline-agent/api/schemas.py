@@ -32,6 +32,7 @@ class IncidentStatusResponse(BaseModel):
     risk_score: Optional[float] = None
     current_node: Optional[str] = None       # node currently executing (None when idle)
     nodes_completed: Optional[list] = None   # ordered list of node names that have finished
+    node_details: Optional[dict] = None      # {node_name: one-line summary} for demo replay
     error: Optional[str] = None
 
 

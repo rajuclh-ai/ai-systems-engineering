@@ -147,32 +147,34 @@ def _print_node(node: str, detail, *, cyan: bool = False) -> None:
 
     header = Text()
     header.append(f"  ✓  ", style=f"bold {color}")
-    header.append(label, style=color)
+    header.append(label, style=f"bold {color}")
     console.print(header)
 
     if not detail:
+        console.print()
         return
 
     # Legacy string fallback
     if isinstance(detail, str):
-        console.print(Text(f"       → {detail}", style="dim"))
+        console.print(Text(f"       → {detail}", style="yellow"))
+        console.print()
         return
 
     # Structured dict: received + output
-    indent = "         "
+    indent = "           "
 
     received = [r for r in (detail.get("received") or []) if r]
     if received:
-        console.print(Text(f"       received:", style="dim"))
+        console.print(Text(f"       received:", style="bold blue"))
         for line in received:
-            console.print(Text(f"{indent}{line}", style="dim"))
+            console.print(Text(f"{indent}{line}", style="blue"))
 
     out_label = detail.get("label") or "output"
     output    = [o for o in (detail.get("output") or []) if o]
     if output:
-        console.print(Text(f"       {out_label}:", style="bold dim"))
+        console.print(Text(f"       {out_label}:", style=f"bold {color}"))
         for line in output:
-            console.print(Text(f"{indent}{line}", style="white"))
+            console.print(Text(f"{indent}{line}", style=f"bold {color}"))
 
     console.print()  # blank line between nodes
 

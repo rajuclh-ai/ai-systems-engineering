@@ -293,9 +293,9 @@ def _extract_node_detail(node_name: str, values: dict, accumulated: dict) -> dic
                 ],
             }
 
-    except Exception:
-        pass
-    return {"received": [], "label": "output", "output": []}
+    except Exception as exc:
+        logger.warning("_extract_node_detail failed for node=%s: %s", node_name, exc)
+    return {"received": [], "label": "output", "output": [f"(detail extraction failed — check API logs)"]}
 
 
 async def _run_agent(thread_id: str, pipeline_id: str, initial_state: dict) -> None:

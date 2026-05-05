@@ -4,9 +4,13 @@ A production-grade LangGraph agent that monitors data pipeline failures, diagnos
 
 Built on real Flink/Kafka failure patterns — schema drift, consumer lag, job failures, null spikes, restart storms.
 
+**Architecture pattern: single agent, multi-node.** One LangGraph `StateGraph`, one shared `AgentState`, seven nodes with distinct responsibilities. Three nodes use an LLM (Diagnosis, Remediation, Learning); four are deterministic. This is an intentional design — the problem is sequential and well-defined, so a structured agentic pipeline outperforms a multi-agent setup here.
+
 ---
 
 ## Architecture
+
+> Single agent. Seven nodes. One shared state. Three nodes use an LLM — four are deterministic. Each node has a single responsibility and passes results forward via `AgentState`.
 
 ```
 POST /incidents  (FastAPI)
@@ -95,6 +99,57 @@ LangSmith  (full trace per incident — every node, every LLM call)
 | Any (low confidence) | `ALERT_ONLY` | 0.1 | No | Simulated |
 
 Risk score > 0.7 → Human approval required before execution.
+
+---
+
+## Safety Model — What Happens if the LLM Picks the Wrong Strategy?
+
+There are four layers of protection. The worst case is always an alert to the engineer — never silent data corruption.
+
+### Layer 1 — Risk scores are hardcoded, the LLM cannot override them
+
+The LLM proposes a strategy. The code assigns the risk score — the LLM's own value is discarded:
+
+```python
+plan.risk_score = RISK_SCORES.get(plan.strategy, 0.5)  # LLM's score ignored
+requires_approval = plan.risk_score > 0.7
+```
+
+Even if the LLM returns `risk_score=0.95` for a `RESTART`, the code sets it to `0.3`.
+
+### Layer 2 — Low confidence produces a safe fallback
+
+If the Diagnosis node is uncertain (no history in SQLite, vague metrics), it returns a low confidence score. The Remediation node sees this and falls back to `ALERT_ONLY`:
+
+```
+confidence = 0.35  →  LLM picks ALERT_ONLY  →  risk = 0.1  →  no action taken
+```
+
+### Layer 3 — Human checkpoint blocks high-risk execution (Scenario 2)
+
+Any strategy with `risk > 0.7` pauses the graph before execution. The engineer sees the plan and can reject it:
+
+```
+SAVEPOINT_REDEPLOY  →  risk = 0.8  →  graph pauses
+Engineer types REJECT  →  falls back to ALERT_ONLY
+SAVEPOINT_REDEPLOY never runs
+```
+
+The LangGraph interrupt persists to SQLite — the pause survives a server restart.
+
+### Layer 4 — Verification catches a failed fix and retries (Scenario 3)
+
+After a `RESTART` executes, the Verification node polls Flink every 5s for 60s:
+
+```
+RESTART executed  →  new_job_id returned
+Verification polls GET /jobs/{new_job_id}:
+  → RUNNING within 60s  →  ✅ verified
+  → still FAILED after 60s  →  retry (max 2 attempts)
+  → all retries exhausted  →  ALERT_ONLY + manual intervention required
+```
+
+The agent does not trust its own action — it verifies the outcome independently.
 
 ---
 

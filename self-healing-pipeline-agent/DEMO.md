@@ -18,7 +18,7 @@ This one paragraph is your entire demo. Everything else is evidence for it.
 
 | Time | Action | What to say |
 |---|---|---|
-| 0:00 | Show architecture diagram | "Seven nodes. Three use an LLM. Four are deterministic. That split is intentional." |
+| 0:00 | Show architecture diagram | "Single agent, seven nodes, one shared state. Three nodes use an LLM — four are deterministic. That split is intentional." |
 | 1:00 | Run Scenario 1 — show curl panel | "Consumer lag spike — 2.8M messages behind, 94% CPU. Watch what the monitor sees." |
 | 1:30 | Replay nodes live | Narrate each node — see talking points below |
 | 3:30 | Bridge to Scenario 3 | "That was simulated. Now a real Flink cluster." |
@@ -64,13 +64,15 @@ This one paragraph is your entire demo. Everything else is evidence for it.
 
 ## Key Lines to Land
 
-1. **On the Monitor design:** "I deliberately kept the Monitor rule-based. The LLM is expensive — in compute, latency, and explainability. You use it where reasoning adds value, not where a threshold check will do."
+1. **On the agent pattern:** "This is a single agent, not multi-agent. One graph, one shared state, seven nodes. Multi-agent adds coordination overhead — it's the right call when you have parallel workstreams or competing objectives. Here the problem is sequential and well-defined, so a structured single-agent pipeline is the better design."
 
-2. **On LangGraph vs raw asyncio:** "LangGraph gives me durable state and interruptible graphs out of the box. With raw asyncio I'd be building a state machine from scratch and hand-rolling the HITL pause logic. That's not the interesting problem here."
+2. **On the Monitor design:** "I deliberately kept the Monitor rule-based. The LLM is expensive — in compute, latency, and explainability. You use it where reasoning adds value, not where a threshold check will do."
 
-3. **On the async API:** "POST /incidents returns in under 10ms. The agent runs in a background thread. The client polls. That's the only design that works when your graph can take 60 seconds and your LLM calls can fail."
+3. **On LangGraph vs raw asyncio:** "LangGraph gives me durable state and interruptible graphs out of the box. With raw asyncio I'd be building a state machine from scratch and hand-rolling the HITL pause logic. That's not the interesting problem here."
 
-4. **On the closing line:** "Every incident this agent handles is one fewer 2am page. And every outcome it stores makes the next diagnosis slightly more informed."
+4. **On the async API:** "POST /incidents returns in under 10ms. The agent runs in a background thread. The client polls. That's the only design that works when your graph can take 60 seconds and your LLM calls can fail."
+
+5. **On the closing line:** "Every incident this agent handles is one fewer 2am page. And every outcome it stores makes the next diagnosis slightly more informed."
 
 ---
 

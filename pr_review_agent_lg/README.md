@@ -1,7 +1,7 @@
 # PR Review Agent — LangGraph Edition
 
 > v2 of [pr_review_agent](../pr_review_agent) — rebuilt with LangGraph, LangChain, and LangSmith.
-> v1 used raw OpenAI SDK + `asyncio.gather()`. This version adds durable state, parallel fan-out via `Send()`, human-in-the-loop approval, iterative review rounds, and full LangSmith observability.
+> v1 used raw OpenAI SDK + `asyncio.gather()`. This version adds durable state, parallel fan-out via `Send()`, and full LangSmith observability.
 
 ---
 
@@ -10,7 +10,7 @@
 Code review is a reasoning problem, not a lookup problem.
 Three specialists examine a diff from different angles — security, logic, style.
 A critic synthesizes their findings into a single actionable verdict.
-When the risk is too high to post automatically, the agent pauses and asks.
+The verdict is posted as a GitHub PR comment — the engineer reads it and decides.
 Every outcome is stored — the agent gets smarter with each review.
 
 ---
@@ -99,11 +99,10 @@ This agent posts a review comment. The engineer reads it and decides what to act
 The human is already in the loop by the nature of the PR review process.
 Adding HITL here would be unnecessary complexity with no safety benefit.
 
-### 4. Iterative review loop
+### 4. Iterative review loop — out of scope (v1)
 
-After posting a review, the agent can re-run on the next commit push.
-State is persisted via `MemorySaver` — the agent remembers what it flagged in round 1
-and checks if those issues were addressed in round 2.
+Deferred to a future version. The agent completes one review per trigger.
+MemorySaver persists state within a single review run only.
 
 ### 5. Learning node
 
@@ -144,10 +143,9 @@ class ReviewState(TypedDict):
     verdict:          Optional[str]       # APPROVE | REQUEST_CHANGES | NEEDS_DISCUSSION
 
     # Learning
-    incident_id:      Optional[str]
+    review_id:        Optional[str]
 
     # Metadata
-    messages:         List[dict]
     iteration_count:  int
 ```
 
@@ -193,12 +191,12 @@ CriticReport
 | State persistence | None | `MemorySaver` checkpointer |
 | Learning | None | SQLite via SQLAlchemy |
 | API | Flask | FastAPI |
-| Config | python-dotenv | pydantic-settings |
+| Config | python-dotenv | python-dotenv |
 | Package manager | pip | uv |
 
 ---
 
-## Project Structure (planned)
+## Project Structure
 
 ```
 pr_review_agent_lg/
@@ -220,25 +218,93 @@ pr_review_agent_lg/
 ├── api/
 │   ├── main.py               # FastAPI app
 │   ├── routes/
-│   │   ├── reviews.py        # POST /reviews, GET /reviews/{thread_id}/status
-│   │   └── approval.py       # POST /approval/{thread_id}
+│   │   └── reviews.py        # POST /reviews, GET /reviews/{thread_id}
+│   ├── status_store.py       # In-memory status keyed by thread_id
 │   └── schemas.py            # API request/response models
 ├── utils/
 │   └── github.py             # GitHub REST API client (carry over from v1)
+├── templates/
+│   └── index.html            # Ported v1 UI with async polling
 ├── tests/
-├── .env
+│   ├── conftest.py
+│   ├── test_graph.py
+│   ├── test_nodes.py
+│   ├── test_api.py
+│   └── test_github.py
+├── .env.example
+├── .gitignore
 └── pyproject.toml
 ```
 
 ---
 
-## Build Plan
+## Running Locally
 
-| Week | Deliverable |
-|---|---|
-| 1 | `ReviewState`, `fetcher_node`, 3 specialist nodes via `Send()`, `critic_node` — graph running end to end |
-| 2 | FastAPI layer, LangSmith tracing, SQLite learning node |
-| 3 | `post_comment_node`, iterative review loop, demo script |
+**1. Configure environment**
+
+```bash
+cp .env.example .env
+# fill in your keys
+```
+
+`.env` should contain:
+```
+OPENAI_API_KEY=sk-...
+GITHUB_TOKEN=ghp_...          # optional — needed to post comments to GitHub
+LANGCHAIN_TRACING_V2=false    # set to true to enable LangSmith tracing
+LANGCHAIN_API_KEY=ls__...     # required if tracing is enabled
+```
+
+**2. Install dependencies**
+
+```bash
+pip install -e .
+# or, if using uv:
+uv sync
+```
+
+**3. Start the server**
+
+```bash
+uvicorn api.main:app --reload --port 8001
+```
+
+**4. Open the UI**
+
+Navigate to `http://localhost:8001` — paste a GitHub PR URL or raw diff and click **Review PR**.
+
+If `GITHUB_TOKEN` is set and has write access, the agent posts the review as a PR comment.
+If not, the review is display-only — the UI still shows the full verdict and findings.
+
+**Sample PR for testing:**
+
+```
+https://github.com/rajuclh-ai/ai-systems-engineering/pull/1
+```
+
+This PR contains intentional issues across all three specialist domains:
+- **Security**: hardcoded `API_KEY` and `DB_PASSWORD`, SQL injection, command injection
+- **Logic**: null dereference, missing edge cases
+- **Style**: poor variable naming, magic numbers, dead code
+
+Expected verdict: `REQUEST_CHANGES`
+
+---
+
+## Tests
+
+44 tests covering all nodes, graph wiring, API routes, and GitHub utilities.
+All LLM calls are mocked — tests pass with `OPENAI_API_KEY=test-key`.
+
+```bash
+python3 -m pytest tests/ -q
+```
+
+---
+
+## Out of Scope (v1)
+
+- Iterative review loop (re-run on next commit push) — deferred to a future version
 
 ---
 

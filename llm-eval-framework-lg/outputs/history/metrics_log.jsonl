@@ -1,0 +1,1 @@
+{"run_id": "2026-05-24T16-56-01Z", "model": "gpt-4o-mini", "timestamp": "2026-05-24T16:56:24.976560+00:00", "overall": "PASS", "cost_usd": 0.0, "total_tokens": 0, "agent_bug_recall": 1.0, "agent_false_positive_rate": 0.0571, "agent_comment_quality": 0.6657}

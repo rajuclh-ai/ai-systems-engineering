@@ -1,0 +1,50 @@
+[
+  {
+    "question": "Who is one of the authors of the paper on efficient personalization of generative user interfaces?",
+    "ground_truth": "One of the authors of the paper titled 'Efficient Personalization of Generative User Interfaces' is Samarth Das."
+  },
+  {
+    "question": "Who is Zi Rui Lucas Lim and what is his contribution to the field of automated UX evaluation?",
+    "ground_truth": "Zi Rui Lucas Lim is one of the authors of the paper titled 'OpeFlo: Automated UX Evaluation via Simulated Human Web Interaction with GUI Grounding.' This work presents OpenFlo, a user-experience evaluation agent that simulates user behavior on websites to produce standardized usability evaluations, thereby enhancing the efficiency of web usability assessments."
+  },
+  {
+    "question": "How does the concept of cs.AI relate to metacognition in the context of the provided abstract?",
+    "ground_truth": "In the context of the provided abstract, cs.AI relates to metacognition through the development of an operational framework that models metacognitive evaluations as state-transforming operations. This framework addresses the sequential nature of metacognition, where an agent evaluates and updates internal states, and explores the implications of order effects in cognition, suggesting that these effects may reveal deeper structural non-commutativity."
+  },
+  {
+    "question": "What are diffushion-maps and how do they relate to transformers?",
+    "ground_truth": "Diffusion-maps are part of a single Markov geometry that connects with transformers, magnetic Laplacians, and attention mechanisms. They are shown to be different regimes of this geometry, which is built from pre-softmax query-scores."
+  },
+  {
+    "question": "How does the use of Reconfigurable Intelligent Surfaces (RIS) in smart radio environments relate to the computational efficiency improvements offered by Rotary Position Embedding (RoPE) in Transformer architectures?",
+    "ground_truth": "The use of Reconfigurable Intelligent Surfaces (RIS) in smart radio environments aims to engineer efficient communication networks by overcoming computational overhead associated with Channel State Information (CSI) estimation. This is achieved through a Hierarchical Multi-Agent Reinforcement Learning (HMARL) architecture that enhances signal redirection without the CSI burden. Similarly, Rotary Position Embedding (RoPE) in Transformer architectures addresses computational inefficiencies by reformulating vector operations into unified matrix transformations, thus improving hardware utilization and execution speed. Both approaches focus on enhancing efficiency in their respective domains\u2014RIS in wireless communication and RoPE in machine learning\u2014demonstrating a shared goal of optimizing performance while reducing computational costs."
+  },
+  {
+    "question": "How does the use of Reconfigurable Intelligent Surfaces (RIS) relate to the challenges faced in exploring Agent-Based Models (ABMs)?",
+    "ground_truth": "The use of Reconfigurable Intelligent Surfaces (RIS) addresses challenges in smart radio environments by eliminating the computational overhead of Channel State Information (CSI) estimation, which is crucial for large-scale deployments. Similarly, exploring Agent-Based Models (ABMs) faces challenges due to the curse of dimensionality and stochasticity. Both RIS and ABMs require innovative approaches, such as the hierarchical framework in RIS that utilizes user localization data and the multi-stage pipeline in ABMs that integrates machine learning surrogates to manage complexity and improve efficiency."
+  },
+  {
+    "question": "How does the use of Reconfigurable Intelligent Surfaces (RIS) in the context of Hierarchical Multi-Agent Reinforcement Learning (HMARL) compare to the systematic exploration of Agent-Based Models (ABMs) in terms of managing complex systems and improving efficiency?",
+    "ground_truth": "The use of Reconfigurable Intelligent Surfaces (RIS) within the Hierarchical Multi-Agent Reinforcement Learning (HMARL) framework focuses on engineering smart radio environments for next-generation millimeter-wave networks by overcoming computational overhead and optimizing signal redirection. This approach achieves significant improvements in received signal strength indicator (RSSI) and scalability in multi-user scenarios. In contrast, the systematic exploration of Agent-Based Models (ABMs) addresses challenges posed by dimensionality and stochasticity through a multi-stage workflow that integrates design of experiments with machine learning surrogates. This methodology automates the identification of dominant variables and nonlinear interactions, providing a rigorous framework for sensitivity analysis and policy testing. Both approaches aim to enhance efficiency in complex systems, but RIS emphasizes real-time signal management while ABMs focus on understanding variable interactions in stochastic environments."
+  },
+  {
+    "question": "How do Reconfigurable Intelligent Surfaces (RIS) contribute to the efficiency of AI medical devices in healthcare settings?",
+    "ground_truth": "Reconfigurable Intelligent Surfaces (RIS) contribute to the efficiency of AI medical devices by engineering smart radio environments that enhance communication and data transmission in healthcare settings. The hierarchical framework introduced for RIS allows for improved signal redirection and robust multi-user scalability, which is crucial for the operation of AI medical devices. This is particularly relevant given that there are over 1,000 FDA-authorized AI medical devices, and the performance of these devices can be significantly influenced by the quality of data transmission and localization accuracy. By eliminating computational overhead and maintaining high-fidelity signal management, RIS can support the equitable performance of AI medical devices across diverse patient subgroups, as highlighted in the equity assessment of brain tumor segmentation models."
+  },
+  {
+    "question": "What is the significance of Xi Zhao's contribution to the MobiFlow framework in addressing the limitations of existing mobile agent evaluation benchmarks?",
+    "ground_truth": "Xi Zhao's contribution to the MobiFlow framework is significant as it addresses the limitations of existing mobile agent evaluation benchmarks like AndroidWorld. MobiFlow proposes an evaluation framework that draws tasks from arbitrary third-party applications, allowing for a more accurate assessment of model performance in real-world scenarios. By utilizing a graph-construction algorithm based on multi-trajectory fusion, MobiFlow effectively compresses the state space and supports dynamic interaction, leading to evaluation results that align better with human assessments and can guide the training of future GUI-based models."
+  },
+  {
+    "question": "What role Lin Yang play in MedGemma 1.5 Technical Report and what are the improvements made in this version compared to MedGemma 1?",
+    "ground_truth": "Lin Yang is one of the authors of the MedGemma 1.5 Technical Report. The improvements made in MedGemma 1.5 compared to MedGemma 1 include significant gains in high-dimensional medical imaging capabilities, such as an 11% increase in 3D MRI condition classification accuracy and a 3% increase in 3D CT condition classification. Additionally, it achieved a 47% macro F1 gain in whole slide pathology imaging and improved anatomical localization with a 35% increase in Intersection over Union on chest X-rays."
+  },
+  {
+    "question": "Who is Yu Zhu and what role does he play in the development of NeuroFlow for visual encoding and decoding?",
+    "ground_truth": "Yu Zhu is one of the authors of the paper titled 'NeuroFlow: Toward Unified Visual Encoding and Decoding from Neural Activity.' In this work, he contributes to the development of NeuroFlow, which is a unified framework designed to model visual encoding and decoding from neural activity. This framework aims to improve the understanding of the neural mechanisms underlying human visual perception by treating the tasks of encoding and decoding as a single, efficient process."
+  },
+  {
+    "question": "How does the implementation of a Transformer contribute to the self-prior mechanism in the mirror self-recognition test?",
+    "ground_truth": "The implementation of a Transformer in the self-prior mechanism allows the model to learn the density of familiar multisensory experiences. This learning enables the model to detect discrepancies when a novel mark appears, driving mark-directed behavior through active inference. The Transformer thus plays a crucial role in facilitating the computational model's ability to distinguish self from non-self during the mirror self-recognition test."
+  }
+]

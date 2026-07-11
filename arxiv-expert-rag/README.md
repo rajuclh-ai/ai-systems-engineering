@@ -222,3 +222,16 @@ Semantic: "LoRA" → also finds "parameter-efficient fine-tuning", "low-rank ada
 
 ### Why Incremental Ingestion?
 A `seen.json` manifest tracks every fetched paper URL. Re-running `ingest` skips already-processed papers — no duplicate chunks, no redundant embedding calls, no wasted tokens.
+
+### What is Cosine Similarity?
+Cosine similarity measures how similar two pieces of text are in meaning — by measuring the angle between their embedding vectors.
+
+```
+"transformer attention"       →  [0.23, -0.11, 0.87, ...]  ─┐
+"self-attention mechanism"    →  [0.21, -0.09, 0.85, ...]  ─┴─► small angle → high similarity
+"stock market prediction"     →  [-0.54, 0.33, -0.12, ...] ────► large angle → low similarity
+```
+
+Two texts with similar meaning point in nearly the same direction in vector space — the angle between them is small, so cosine similarity is high (close to 1.0). Unrelated texts point in different directions — large angle, low similarity (close to 0.0).
+
+This is how ChromaDB finds the most relevant chunks for a query: it embeds the question into the same vector space as all stored chunks, then returns the ones with the smallest angle — the closest meaning match.

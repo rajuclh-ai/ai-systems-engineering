@@ -113,12 +113,12 @@ You do not write this LLM code — RAGAS handles it as a black box.
 
 The four metrics it computes all require semantic understanding:
 
-| Metric | Why an LLM, not a rule |
-|---|---|
-| Faithfulness | "Is this sentence entailed by the retrieved chunks?" — requires reading comprehension |
-| Answer Relevance | "Does this answer address the question?" — requires natural language understanding |
-| Context Recall | "Did retrieval surface the right information?" — requires semantic matching, not keyword matching |
-| Context Precision | "Are the retrieved chunks focused or noisy?" — requires judgment about relevance |
+| Metric | What it asks | Pipeline stage | Why an LLM, not a rule |
+|---|---|---|---|
+| **Faithfulness** | Is every claim in the answer entailed by the retrieved chunks? | Generation | Requires reading comprehension — judging whether a claim is supported by differently-worded context |
+| **Answer Relevance** | Does the answer actually address the question asked? | Generation | Requires natural language understanding — an answer can be grounded yet off-topic |
+| **Context Recall** | Did retrieval surface the right information needed to answer? | Retrieval | Requires semantic matching, not keyword matching |
+| **Context Precision** | Are the retrieved chunks focused, or noisy with irrelevant content? | Retrieval | Requires judgment about relevance — signal-to-noise can't be string-matched |
 
 A regex or embedding similarity score cannot reliably answer any of these. RAGAS uses an LLM as a semantic judge.
 

@@ -338,6 +338,33 @@ CommentQualityResult  (LLM judge structured output)
 
 ## Metrics Reference
 
+### Where Precision and Recall Come From
+
+Precision and Recall are decades-old Information Retrieval (IR) concepts — long before RAG existed.
+
+| Question | Metric | Formula |
+|---|---|---|
+| Of all relevant items that **exist**, how many did you **retrieve**? (did you miss anything?) | **Recall** | relevant retrieved / total relevant |
+| Of all items **retrieved**, how many were actually **relevant**? (did you bring back junk?) | **Precision** | relevant retrieved / total retrieved |
+
+**Example — library search for "whale" books:**
+
+```
+Library has 10 whale books.
+Your search returns 8 books.
+6 of those 8 are actually about whales.
+
+Recall    = 6 / 10 = 0.60  ← you missed 4 relevant books
+Precision = 6 / 8  = 0.75  ← 2 of your results were irrelevant
+```
+
+**How this maps to RAG retrieval:**
+
+- **Context Recall** — did the retriever surface all the chunks needed to answer the question? (completeness)
+- **Context Precision** — of the chunks retrieved, how many actually contributed to the answer? (no noise)
+
+---
+
 ### RAG Metrics (via RAGAS — unchanged from v1)
 
 | Metric | What it measures | Threshold |

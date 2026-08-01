@@ -108,6 +108,13 @@ LLMs are used in exactly two places. Both exist for the same reason: **the thing
 **Node:** `ragas_scorer_node` (RAG sub-graph)
 **File:** `nodes/rag/ragas_scorer.py`
 
+**What is RAGAS?**
+RAGAS (Retrieval-Augmented Generation Assessment) is an open-source evaluation framework designed to quantitatively test, monitor, and optimize LLM applications using RAG. It uses LLMs under the hood as judges to score the system on a component level without always requiring human-annotated ground truth data.
+
+RAGAS breaks evaluation into the two core mechanics of a RAG application:
+- **Retrieval** (fetching information) — scored by Context Precision and Context Recall
+- **Generation** (writing the response) — scored by Faithfulness and Answer Relevance
+
 RAGAS calls an LLM internally when it runs `ragas.evaluate()` on the 10 enriched samples.
 You do not write this LLM code — RAGAS handles it as a black box.
 

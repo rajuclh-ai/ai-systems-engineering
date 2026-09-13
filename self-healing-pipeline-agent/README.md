@@ -25,11 +25,15 @@ POST /incidents  (FastAPI)
          ├── UNKNOWN ──────────────────────────────────► Learning Node ──► END
          │
          ▼
-┌───────────────────┐
-│  Diagnosis Node   │  LLM-powered (gpt-4o-mini)
-│                   │  Queries SQLite for similar past incidents
+┌───────────────────┐     ┌──────────────────┐
+│  Diagnosis Node   │────▶│  Incident DB     │
+│                   │◀────│  (SQLite)        │
+│  LLM-powered      │     │  Past incidents  │
+│  (gpt-4o-mini)    │     └──────────────────┘
 │                   │  Output: RootCause + confidence score
 └────────┬──────────┘
+         │
+         ├── confidence < 0.5 ─────────────────► ALERT_ONLY ──► Learning Node ──► END
          │
          ▼
 ┌───────────────────┐
@@ -62,8 +66,11 @@ POST /incidents  (FastAPI)
 └────────┬──────────┘
          │  verified / skipped
          ▼
-┌───────────────────┐
-│  Learning Node    │  Writes IncidentRecord to SQLite
+┌───────────────────┐     ┌──────────────────┐
+│  Learning Node    │────▶│  Incident DB     │
+│                   │     │  (SQLite)        │
+│  Writes           │     │  Past incidents  │
+│  IncidentRecord   │     └──────────────────┘
 │                   │  Future Diagnosis queries benefit from this
 └───────────────────┘
          │
